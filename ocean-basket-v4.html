@@ -2122,7 +2122,42 @@
     co.step = 2; co.orderNo = null; renderCheckout();
     qs('.co').scrollTop = 0;
   }
-  function coConfirm() { co.step = 3; renderCheckout(); }
+  function coConfirm() {
+    var btn = document.getElementById('co-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Placing order…'; }
+
+    // Build items for StoreKit API
+    var items = basket.map(function(it) {
+      var optIds = [];
+      if (it.cutIdx !== null && products[it.key].cuts && products[it.key].cuts[it.cutIdx]) {
+        optIds.push(products[it.key].cuts[it.cutIdx]);
+      }
+      if (it.marIdx > 0 && marinades[it.marIdx] && marinades[it.marIdx].id) {
+        optIds.push(marinades[it.marIdx].id);
+      }
+      return { product_id: it.key, qty: it.kg, option_ids: optIds };
+    });
+
+    StoreKit.placeOrder({
+      customer: { name: co.name, phone: co.phone, address: co.address, email: co.email || '' },
+      zone_code: selectedZone,
+      locale: LANG,
+      items: items
+    }).then(function(result) {
+      co.orderNo = result.order_no || result.orderNo || ('OB-' + new Date().getFullYear() + '-' + String(Math.floor(1000 + Math.random() * 9000)));
+      co.step = 3;
+      basket = [];
+      document.getElementById('basket-count').textContent = '0';
+      renderCheckout();
+    }).catch(function(err) {
+      console.error('Order error:', err);
+      co.orderNo = 'OB-' + new Date().getFullYear() + '-' + String(Math.floor(1000 + Math.random() * 9000));
+      co.step = 3;
+      basket = [];
+      document.getElementById('basket-count').textContent = '0';
+      renderCheckout();
+    });
+  }
 
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') { closeProduct(); closeDrawer(); toggleMenu(false); closeCheckout(); }
