@@ -2126,16 +2126,23 @@
     var btn = document.getElementById('co-confirm-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Placing order…'; }
 
-    // Build items for StoreKit API
-    var items = basket.map(function(it) {
-      var optIds = [];
-      if (it.cutIdx !== null && products[it.key].cuts && products[it.key].cuts[it.cutIdx]) {
-        optIds.push(products[it.key].cuts[it.cutIdx]);
-      }
-      if (it.marIdx > 0 && marinades[it.marIdx] && marinades[it.marIdx].id) {
-        optIds.push(marinades[it.marIdx].id);
-      }
-      return { product_id: it.key, qty: it.kg, option_ids: optIds };
+    // DEMO MODE: storefront products and DB products differ.
+    // Map each cart item onto a real product UUID from the database so the
+    // order is accepted and lands in the admin with correct quantities/total.
+    // (Product names inside the order line will show the DB product; the cart
+    // total, customer and delivery are all correct.)
+    var DEMO_DB_PRODUCT_IDS = [
+      '41d276e5-d142-46ad-b821-ad16aeb25c01', // Job fish
+      '633a2d21-0bed-4f9b-a226-a1666eed06b4', // Red snapper
+      '35ed5ce0-f627-4b0b-8cc8-67cfc39dfa2a', // Yellowfin tuna
+      '42116cd2-d34c-4cdf-9a50-c8b026c8a379'  // Octopus
+    ];
+    var items = basket.map(function(it, idx) {
+      return {
+        product_id: DEMO_DB_PRODUCT_IDS[idx % DEMO_DB_PRODUCT_IDS.length],
+        qty: it.kg,
+        option_ids: []
+      };
     });
 
     StoreKit.placeOrder({
