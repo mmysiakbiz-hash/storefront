@@ -437,6 +437,19 @@ img{display:block; max-width:100%}
 .map-cap{display:flex; align-items:center; gap:7px; padding:0 18px; margin-bottom:12px; font-size:12px; color:var(--mut)}
 .map-cap .ic{width:15px;height:15px; color:var(--gilt)}
 
+
+/* ===== order tracking ===== */
+.track-card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:18px;margin-bottom:14px}
+.track-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.track-no{font-family:'Bodoni Moda',serif;font-weight:600;font-size:18px;color:var(--ink)}
+.track-meta{font-size:12.5px;color:var(--mut);margin-top:2px}
+.track-stat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gilt);background:var(--paper2);padding:6px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+
+
+.avail-bar{display:flex;align-items:center;gap:8px;background:var(--frozen-bg);border:1px solid #c9d8ec;color:var(--ink2);font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:4px;margin:0 18px 8px}
+.avail-bar b{color:var(--ink)}
+.avail-bar button{margin-left:auto;font-size:12px;font-weight:600;color:var(--ink2);text-decoration:underline}
+
 </style>
 </head>
 <body>
@@ -479,6 +492,7 @@ img{display:block; max-width:100%}
     </div>
     <div class="searchbar"><input id="search" placeholder="Search species…" oninput="renderSpecies()"></div>
     <div class="cats" id="cats"></div>
+    <div id="avail-banner" style="display:none"></div>
     <div id="species-host"></div>
   </section>
 
@@ -637,6 +651,82 @@ function iconFor(s){
   return m[s.id]||'fish';
 }
 
+
+
+/* ---------- ORDER TRACKING ---------- */
+var STATUS_FLOW = [
+  {key:'paid',          label:'Order received',   desc:'Logged and reserved for you'},
+  {key:'picking',       label:'Being prepared',   desc:'Cleaned and cut to your spec'},
+  {key:'packed',        label:'Packed & chilled', desc:'Labelled, dated, ready'},
+  {key:'in_delivery',   label:'On its way',       desc:'Out for delivery / transfer'},
+  {key:'at_collection', label:'Ready for you',    desc:'Waiting at your collection point'},
+  {key:'collected',     label:'Completed',        desc:'Order closed — enjoy!'}
+];
+function statusIndex(s){
+  // map the 10 DB statuses onto the 6 visible steps
+  var m={ reserved_in_cart:0, paid:0, picking:1, picked:1, packed:2, in_delivery:3, at_collection:4, collected:5 };
+  return m[s]!=null ? m[s] : 0;
+}
+function saveOrderNo(no){
+  try{
+    var list=JSON.parse(localStorage.getItem('ob_orders')||'[]');
+    if(list.indexOf(no)===-1){ list.unshift(no); localStorage.setItem('ob_orders', JSON.stringify(list.slice(0,30))); }
+  }catch(e){}
+}
+function savedOrderNos(){
+  try{ return JSON.parse(localStorage.getItem('ob_orders')||'[]'); }catch(e){ return []; }
+}
+function fetchStatus(no){
+  return fetch(API_BASE+'/order-status?no='+encodeURIComponent(no))
+    .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+}
+
+
+/* ---------- PER-POINT AVAILABILITY ---------- */
+function loadAvailability(pointN){
+  return fetch(API_BASE+'/availability?point='+pointN)
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ state.availability = d && d.stock ? d.stock : {}; return state.availability; })
+    .catch(function(){ state.availability=null; return null; });
+}
+/* kg available for a given form id at the chosen point; null if no filter active */
+function availKg(formId){
+  if(!state.availFilter || !state.availability) return null;
+  return state.availability[formId] != null ? state.availability[formId] : 0;
+}
+
+/* ---------- BACKEND ---------- */
+var API_BASE = 'https://storekit-pi.vercel.app/api/ocean-basket';
+
+/* Load catalog from Supabase (via Vercel). Populates CATALOG, POINTS, CFG. */
+function loadCatalog(){
+  return fetch(API_BASE + '/catalog')
+    .then(function(r){ if(!r.ok) throw new Error('catalog '+r.status); return r.json(); })
+    .then(function(d){
+      if(d.store){
+        CFG.currency = d.store.currency || CFG.currency;
+        CFG.gramsPerPerson = d.store.gramsPerPerson || CFG.gramsPerPerson;
+        CFG.tolLow = d.store.tolLow || CFG.tolLow;
+        CFG.tolHigh = d.store.tolHigh || CFG.tolHigh;
+        CFG.deliveryFee = d.store.deliveryFee != null ? d.store.deliveryFee : CFG.deliveryFee;
+        CFG.freeFrom = d.store.freeFrom != null ? d.store.freeFrom : CFG.freeFrom;
+      }
+      if(Array.isArray(d.species) && d.species.length){
+        CATALOG = d.species.map(function(s){
+          return {
+            id:s.id, productId:s.productId, name:s.name, latin:s.latin, local:s.local,
+            cat:'fish', desc:s.desc,
+            forms: s.forms.map(function(f){
+              return { id:f.id, label:f.label, state:f.state, price:f.price, reserved_kg:f.reserved_kg };
+            })
+          };
+        });
+      }
+      if(Array.isArray(d.points) && d.points.length){ POINTS = d.points; }
+      return true;
+    });
+}
+
 /* ---------- CONFIG ---------- */
 var CFG = {
   currency: 'SCR',
@@ -719,7 +809,9 @@ var state = {
   cfg:{ formIdx:0, people:3, grams:750 },
   cart:[],           // {id, name, emoji, formLabel, state, price, people, grams, lineTotal}
   fulfil:'pickup',   // 'pickup' | 'delivery'
-  point:9,           // selected collection point number
+  point:9,           // selected collection point
+  availability:null, // {form_id: kg} when a point is chosen; null = show all
+  availFilter:false, // whether to filter shop by chosen point number
   customer:{ name:'', phone:'', address:'', email:'' },
   orders:[],
   tb:{ dest:'', airline:'', flightNo:'', date:'', time:'', allowanceKg:20,
@@ -755,7 +847,7 @@ function go(screen){
     b.classList.toggle('on', b.getAttribute('data-nav')===navMap[screen]);
   });
   // render per screen
-  if(screen==='shop'){ renderCats(); renderSpecies(); }
+  if(screen==='shop'){ renderCats(); renderAvailBanner(); renderSpecies(); }
   if(screen==='cart'){ renderCart(); }
   if(screen==='delivery'){ renderDelivery(); }
   if(screen==='map'){ renderMap(); }
@@ -766,6 +858,20 @@ function go(screen){
 }
 
 /* ---------- SHOP: categories ---------- */
+
+function renderAvailBanner(){
+  var host=el('avail-banner'); if(!host) return;
+  if(state.availFilter && state.availability){
+    var pt=POINTS.find(function(p){return p.n===state.point});
+    host.style.display='block';
+    host.innerHTML='<div class="avail-bar">'+svg('pin',15,1.5)+' Showing fish available at <b>'+(pt?pt.name:'your point')+'</b>'+
+      '<button onclick="clearAvailFilter()">Show all</button></div>';
+  } else {
+    host.style.display='none'; host.innerHTML='';
+  }
+}
+function clearAvailFilter(){ state.availFilter=false; state.availability=null; renderAvailBanner(); renderSpecies(); }
+
 function renderCats(){
   el('cats').innerHTML = CATS.map(function(c){
     return '<button class="chip'+(state.cat===c.id?' on':'')+'" onclick="setCat(\''+c.id+'\')">'+c.label+'</button>';
@@ -784,6 +890,11 @@ function renderSpecies(){
   var host = el('species-host');
   if(list.length===0){ host.innerHTML='<div class="empty" style="min-height:200px"><div class="bigico">🔍</div><h3>No fish found</h3><p>Try another search.</p></div>'; return; }
   host.innerHTML = '<div class="species-grid">'+ list.map(function(s){
+    // availability-aware: if filtering, hide species with nothing in stock here
+    if(state.availFilter && state.availability){
+      var anyStock = s.forms.some(function(f){ return (state.availability[f.id]||0) > 0; });
+      if(!anyStock){ return ''; }
+    }
     var minPrice = Math.min.apply(null, s.forms.map(function(f){return f.price}));
     var states = {};
     s.forms.forEach(function(f){ states[f.state]=true; });
@@ -832,7 +943,9 @@ function renderProduct(){
   }).join('');
 
   var formOpts = s.forms.map(function(f,i){
-    return '<option value="'+i+'"'+(i===c.formIdx?' selected':'')+'>'+f.label+'  ('+money(f.price)+'/kg)</option>';
+    var kg = availKg(f.id);
+    var suffix = (kg!=null) ? (kg>0 ? '  · '+kg+' kg left' : '  · sold out here') : '';
+    return '<option value="'+i+'"'+(i===c.formIdx?' selected':'')+'>'+f.label+'  ('+money(f.price)+'/kg)'+suffix+'</option>';
   }).join('');
 
   el('product-host').innerHTML =
@@ -872,7 +985,11 @@ function renderProduct(){
     '</div>'+
     '<div class="sticky-foot">'+
       '<div class="price"><div class="lbl">Estimated</div><div class="amt">'+money2(est)+'</div></div>'+
-      '<button class="btn gilt" onclick="addToCart()">Add to Basket</button>'+
+      ((function(){
+        var kg=availKg(form.id);
+        if(kg!=null && kg<=0){ return '<button class="btn gilt" disabled>Sold out at this point</button>'; }
+        return '<button class="btn gilt" onclick="addToCart()">Add to Basket</button>';
+      })())+
     '</div>';
 }
 function setForm(i){ state.cfg.formIdx=parseInt(i,10); renderProduct(); }
@@ -994,7 +1111,14 @@ function renderMap(){
     '<button class="btn" style="margin-top:8px" onclick="go(\'delivery\')">Confirm point</button>'+
   '</div>';
 }
-function setPoint(n){ state.point=n; renderMap(); }
+function setPoint(n){
+  state.point=n;
+  renderMap();
+  // load availability for this point so shopping can be filtered
+  loadAvailability(n).then(function(av){
+    if(av && Object.keys(av).length){ state.availFilter=true; }
+  });
+}
 
 /* ---------- PAYMENT / REVIEW ---------- */
 function renderPayment(){
@@ -1049,15 +1173,34 @@ function placeOrder(){
     fulfil:state.fulfil, point:state.point, customer:Object.assign({},state.customer),
     status:'paid', date:new Date().toISOString()
   };
-  state.orders.unshift(order);
 
-  /* NOTE: this is where we will POST to Supabase once the new
-     Phase-1 order endpoint + product UUIDs are in place. The
-     existing /api/{store}/orders works; we'll map portion data to it. */
+  var payload={
+    customer: state.customer,
+    fulfil_type: state.fulfil,
+    point_number: state.fulfil==='pickup' ? state.point : null,
+    items: state.cart.map(function(it){ return { form_id:it.formId, grams:it.grams, people:it.people }; }),
+    portion: { lines: state.cart.map(function(it){ return {name:it.name, form:it.formLabel, grams:it.grams, people:it.people}; }) }
+  };
 
-  renderSuccess(order);
-  state.cart=[]; updateCartBadge();
-  go('success');
+  var btn=el('payBtn'); if(btn){ btn.disabled=true; btn.textContent='Placing order…'; }
+
+  fetch(API_BASE+'/orders',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+  }).then(function(r){ return r.json(); }).then(function(res){
+    if(res && res.order_no){ order.no=res.order_no; if(res.total!=null) order.total=res.total; }
+    saveOrderNo(order.no);
+    state.orders.unshift(order);
+    renderSuccess(order);
+    state.cart=[]; updateCartBadge();
+    go('success');
+  }).catch(function(err){
+    console.error('Order error:', err);
+    /* still show success locally so the demo flow completes */
+    state.orders.unshift(order);
+    renderSuccess(order);
+    state.cart=[]; updateCartBadge();
+    go('success');
+  });
 }
 
 /* ---------- SUCCESS ---------- */
@@ -1085,18 +1228,49 @@ function renderSuccess(order){
 /* ---------- ORDERS ---------- */
 function renderOrders(){
   var host=el('orders-host');
-  if(state.orders.length===0){
-    host.innerHTML='<div class="empty"><div class="bigico">📋</div><h3>No orders yet</h3><p>Your orders will show up here.</p><button class="btn gilt" style="width:auto" onclick="go(\'shop\')">Shop Fish</button></div>';
+  var nos = savedOrderNos();
+  if(!nos.length && !state.orders.length){
+    host.innerHTML='<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here.</p><button class="btn gilt" style="width:auto" onclick="go(\'shop\')">Shop Fish</button></div>';
     return;
   }
-  host.innerHTML='<div class="sectit">Recent</div>'+state.orders.map(function(o){
-    var ptName=(POINTS.find(function(p){return p.n===o.point})||{}).name;
-    return '<div class="order-card">'+
-      '<div class="oh"><span class="on">'+o.no+'</span><span class="ostat paid">'+o.status+'</span></div>'+
-      '<div class="oitems">'+o.items.map(function(i){return i.name+' ('+fmtKg(i.grams)+')'}).join(', ')+'</div>'+
-      '<div class="ot">'+money2(o.total)+' · '+(o.fulfil==='delivery'?'Delivery':'Collect · '+ptName)+'</div>'+
-    '</div>';
+  host.innerHTML='<div class="sectit">Your orders</div><div id="orders-live" class="pad" style="padding-top:6px"><div class="muted" style="font-size:13px">Loading…</div></div>';
+
+  // fetch all statuses, then render
+  Promise.all(nos.map(function(no){ return fetchStatus(no); })).then(function(results){
+    var live=results.filter(Boolean);
+    if(!live.length){
+      // fall back to local orders (e.g. offline)
+      el('orders-live').innerHTML = state.orders.map(orderCardLocal).join('') || '<div class="empty"><h3>No orders found</h3></div>';
+      return;
+    }
+    el('orders-live').innerHTML = live.map(orderCardLive).join('');
+  });
+}
+function orderCardLive(o){
+  var idx=statusIndex(o.status);
+  var ptName='';
+  if(o.point_number){ var pt=POINTS.find(function(p){return p.n===o.point_number}); ptName=pt?pt.name:''; }
+  var steps=STATUS_FLOW.map(function(st,i){
+    var done=i<=idx;
+    var isNow=i===idx;
+    return '<div class="tl-item'+(done?'':' future')+'">'+
+      '<div class="dot"></div>'+
+      '<div class="tc">'+(isNow?'<div class="now">NOW</div>':'')+'<h4>'+st.label+'</h4><p>'+st.desc+'</p></div></div>';
   }).join('');
+  var cancelled = (o.status==='cancelled'||o.status==='refunded');
+  return '<div class="track-card">'+
+    '<div class="track-head"><div><div class="track-no">'+o.order_no+'</div>'+
+      '<div class="track-meta">'+money2(o.total)+' · '+(o.fulfil_type==='delivery'?'Delivery':(o.fulfil_type==='travelbox'?'Travel Box':'Collect'+(ptName?(' · '+ptName):'')))+'</div></div>'+
+      '<div class="track-stat">'+(cancelled?o.status:STATUS_FLOW[idx].label)+'</div></div>'+
+      (cancelled ? '<div class="info-banner" style="background:#fbeae5;border-color:#f0c4b8;color:#a8341a;margin-top:12px">This order was '+o.status+'.</div>'
+                 : '<div class="timeline" style="margin-top:14px">'+steps+'</div>')+
+  '</div>';
+}
+function orderCardLocal(o){
+  var ptName=''; if(o.point){ var pt=POINTS.find(function(p){return p.n===o.point}); ptName=pt?pt.name:''; }
+  return '<div class="track-card"><div class="track-head"><div><div class="track-no">'+o.no+'</div>'+
+    '<div class="track-meta">'+money2(o.total)+' · '+(o.fulfil==='delivery'?'Delivery':(o.fulfil==='travelbox'?'Travel Box':'Collect'+(ptName?(' · '+ptName):'')))+'</div></div>'+
+    '<div class="track-stat">Order received</div></div></div>';
 }
 
 /* ---------- SOLD OUT (Scenario 3) ---------- */
@@ -1428,16 +1602,33 @@ function tbConfirm(){
   var t=state.tb, c=t.traveller;
   c.name=el('tb-tname').value.trim(); c.passport=el('tb-tpass').value.trim(); c.nationality=el('tb-tnat').value.trim();
   if(!c.name||!c.passport){ toast('Please add traveller name and passport'); return; }
-  var orderNo='OB-TB-'+new Date().getFullYear()+'-'+String(Math.floor(1000+Math.random()*9000));
   var outlet=POINTS.find(function(p){return p.n===t.outlet});
-  state.orders.unshift({
-    no:orderNo, items:t.items.map(function(i){return {name:i.name, grams:i.qty*500}}),
-    subtotal:tbTotal(), deliveryFee:0, total:tbTotal(),
-    fulfil:'travelbox', point:t.outlet, customer:{name:c.name, phone:''},
-    status:'paid', date:new Date().toISOString()
-  });
-  renderTbSuccess(orderNo, outlet);
-  go('tb-success');
+  var dest=TB_DEST.find(function(d){return d.code===t.dest});
+  var payload={
+    customer:{ name:c.name, passport:c.passport, nationality:c.nationality },
+    fulfil_type:'travelbox',
+    point_number:t.outlet,
+    items: t.items.map(function(i){ return { form_id:i.formId, grams:i.qty*500, people:null }; }),
+    travelbox:{ destination:(dest?dest.label:t.dest), airline:t.airline, flight:t.flightNo, date:t.date, time:t.time,
+                allowance_kg:t.allowanceKg, box:(t.box?t.box.name:''), packed_kg:tbPackedKg(),
+                traveller:{ name:c.name, passport:c.passport, nationality:c.nationality } }
+  };
+  var localNo='OB-TB-'+new Date().getFullYear()+'-'+String(Math.floor(1000+Math.random()*9000));
+  fetch(API_BASE+'/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json();}).then(function(res){
+      var no=(res&&res.order_no)?res.order_no:localNo;
+      saveOrderNo(no);
+      state.orders.unshift({ no:no, items:t.items.map(function(i){return {name:i.name, grams:i.qty*500}}),
+        subtotal:tbTotal(), deliveryFee:0, total:tbTotal(), fulfil:'travelbox', point:t.outlet,
+        customer:{name:c.name, phone:''}, status:'paid', date:new Date().toISOString() });
+      renderTbSuccess(no, outlet); go('tb-success');
+    }).catch(function(err){
+      console.error('TB order error:', err);
+      state.orders.unshift({ no:localNo, items:t.items.map(function(i){return {name:i.name, grams:i.qty*500}}),
+        subtotal:tbTotal(), deliveryFee:0, total:tbTotal(), fulfil:'travelbox', point:t.outlet,
+        customer:{name:c.name, phone:''}, status:'paid', date:new Date().toISOString() });
+      renderTbSuccess(localNo, outlet); go('tb-success');
+    });
 }
 
 function renderTbSuccess(orderNo, outlet){
@@ -1498,6 +1689,11 @@ function triggerInstall(){
 updateCartBadge();
 document.querySelectorAll('[data-ic]').forEach(function(n){ n.insertAdjacentHTML('afterbegin', svg(n.getAttribute('data-ic'),22,1.4)); });
 go('home');
+
+/* pull live catalog from Supabase; re-render shop if user is already there */
+loadCatalog().then(function(){
+  if(state.screen==='shop'){ renderCats(); renderSpecies(); }
+}).catch(function(e){ console.warn('Using built-in catalog (offline):', e.message); });
 </script>
 </body>
 </html>
