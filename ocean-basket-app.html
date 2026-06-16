@@ -465,6 +465,10 @@ img{display:block; max-width:100%}
 /* the number sits upright inside the rotated pin */
 .ob-pin-dot{}
 
+
+.pts-head{font-family:'Bodoni Moda',serif; font-size:24px; font-weight:600; color:var(--ink); line-height:1.15; margin:2px 0 4px}
+.pts-sub{font-size:14px; color:var(--char); font-weight:500; margin:0}
+
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1182,10 +1186,12 @@ function renderMap(){
     return;
   }
 
-  el('map-host').innerHTML='<div class="pad" style="padding-bottom:10px">'+
-    '<p class="muted" style="font-size:13px">Showing points that have everything in your basket. Your package label colour matches the point.</p></div>'+
+  el('map-host').innerHTML='<div class="pad" style="padding-bottom:8px">'+
+    '<h2 class="pts-head">Points with your full basket</h2>'+
+    '<p class="pts-sub">'+ok.length+' point'+(ok.length===1?'':'s')+' '+(ok.length===1?'has':'have')+' everything you ordered, ready to collect.</p>'+
+    '</div>'+
     '<div id="leaflet-map" class="leaflet-wrap"></div>'+
-    '<div class="map-cap">'+svg('pin',15,1.5)+' '+ok.length+' point'+(ok.length===1?' has':'s have')+' your full basket</div>'+
+    '<div class="map-cap">'+svg('pin',15,1.5)+' Your package label colour matches the point you choose.</div>'+
     '<div class="pad" style="padding-top:0" id="point-list">'+
     ok.map(function(p){
       return '<button class="point'+(state.point===p.n?' on':'')+'" id="ptbtn-'+p.n+'" onclick="setPoint('+p.n+')">'+
