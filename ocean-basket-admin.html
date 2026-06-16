@@ -260,9 +260,12 @@ function loadPoints(){
   return sb.from('collection_points').select('*').eq('store_id',STORE_ID).order('number')
     .then(function(r){ state.points=r.data||[]; renderPoints(); });
 }
-function loadOrders(){
+function loadOrders(opts){
   return sb.from('orders').select('*').eq('store_id',STORE_ID).order('created_at',{ascending:false}).limit(50)
-    .then(function(r){ state.orders=r.data||[]; renderOrders(); });
+    .then(function(r){
+      state.orders=r.data||[]; renderOrders();
+      if(opts && opts.notify){ toast('Updated — '+state.orders.length+' orders'); }
+    });
 }
 function loadSettings(){
   return sb.from('stores').select('settings,name,currency').eq('id',STORE_ID).single()
@@ -563,7 +566,7 @@ function renderOrders(){
       '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select>'+
     '</div>';
   }).join('');
-  host.innerHTML='<div class="section-head"><h2>Orders</h2><button class="btn ghost sm" onclick="loadOrders()">Refresh</button></div>'+
+  host.innerHTML='<div class="section-head"><h2>Orders</h2><button class="btn ghost sm" onclick="loadOrders({notify:true})">Refresh</button></div>'+
     '<div class="card">'+(rows||'<div class="empty"><h3>No orders yet</h3></div>')+'</div>';
 }
 function setStatus(id,status){
@@ -638,7 +641,7 @@ function renderReports(){
   }
   function ptLabel(n){ var p=state.points.find(function(x){return x.number==n;}); return p?p.name:('Point '+n); }
 
-  host.innerHTML='<div class="section-head"><h2>Reports</h2><button class="btn ghost sm" onclick="loadOrders().then(renderReports)">Refresh</button></div>'+
+  host.innerHTML='<div class="section-head"><h2>Reports</h2><button class="btn ghost sm" onclick="loadOrders({notify:true}).then(renderReports)">Refresh</button></div>'+
     '<div class="card"><div class="rep-kpis">'+
       '<div class="kpi"><div class="kpi-n">'+money(totalRevenue)+'</div><div class="kpi-l">Revenue (non-cancelled)</div></div>'+
       '<div class="kpi"><div class="kpi-n">'+totalOrders+'</div><div class="kpi-l">Total orders</div></div>'+

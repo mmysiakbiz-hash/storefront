@@ -254,7 +254,10 @@ img{display:block; max-width:100%}
 .opt .oc p{font-size:12.5px; color:var(--mut); margin-top:3px}
 .field{margin-bottom:14px}
 .field label{display:block; font-size:13px; font-weight:600; color:var(--ink); margin-bottom:6px}
-.field input,.field textarea{width:100%; padding:14px 14px; border:1px solid var(--line); border-radius:4px; font-size:14px; font-family:inherit; background:#fff}
+.field input,.field textarea{width:100%; padding:14px 14px; border:1px solid var(--line); border-radius:4px; font-size:14px; font-family:inherit; background:#fff; color:var(--char); font-weight:500}
+.field input[type="date"],.field input[type="time"]{appearance:none; -webkit-appearance:none; min-height:50px; color:var(--char); background:#fff}
+.field input[type="date"]::-webkit-calendar-picker-indicator,.field input[type="time"]::-webkit-calendar-picker-indicator{opacity:.55; cursor:pointer}
+.field input[type="date"]::-webkit-date-and-time-value{text-align:left}
 .field input:focus,.field textarea:focus{outline:none; border-color:var(--gilt)}
 .field input.err{border-color:var(--pink)}
 .info-banner{background:var(--frozen-bg); border:1px solid #c5d9fb; color:#1a4ba8; font-size:12.5px; padding:12px 14px; border-radius:11px; display:flex; gap:8px; margin-top:6px}
@@ -699,7 +702,17 @@ function savedOrderNos(){
 }
 function fetchStatus(no){
   return fetch(API_BASE+'/order-status?no='+encodeURIComponent(no))
-    .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+    .then(function(r){
+      if(r.status===404){ return {__missing:no}; }   // ghost/local number not in DB
+      return r.ok ? r.json() : null;
+    }).catch(function(){ return null; });
+}
+/* remove an order number we now know isn't in the database (old local/fallback numbers) */
+function pruneOrderNo(no){
+  try{
+    var list=JSON.parse(localStorage.getItem('ob_orders')||'[]').filter(function(x){ return x!==no; });
+    localStorage.setItem('ob_orders', JSON.stringify(list));
+  }catch(e){}
 }
 
 
@@ -1405,10 +1418,13 @@ function renderOrders(){
 
   // fetch all statuses, then render
   Promise.all(nos.map(function(no){ return fetchStatus(no); })).then(function(results){
-    var live=results.filter(Boolean);
+    // drop ghost numbers (404) from local storage so they stop being queried
+    results.forEach(function(r){ if(r && r.__missing){ pruneOrderNo(r.__missing); } });
+    var live=results.filter(function(r){ return r && !r.__missing; });
     if(!live.length){
-      // fall back to local orders (e.g. offline)
-      el('orders-live').innerHTML = state.orders.map(orderCardLocal).join('') || '<div class="empty"><h3>No orders found</h3></div>';
+      // fall back to local orders (e.g. offline) — but skip ghost numbers
+      var localCards = state.orders.map(orderCardLocal).join('');
+      el('orders-live').innerHTML = localCards || '<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here once you place one.</p></div>';
       return;
     }
     el('orders-live').innerHTML = live.map(orderCardLive).join('');
