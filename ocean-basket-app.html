@@ -503,6 +503,33 @@ img{display:block; max-width:100%}
 .obsel-opt.sel .obsel-tick{opacity:1}
 .obsel-backdrop{position:fixed; inset:0; z-index:55; background:transparent}
 
+
+/* ===== install banner (brand) ===== */
+.ib{position:fixed; left:10px; right:10px; bottom:calc(var(--nav-h) + 10px); z-index:80;
+  max-width:calc(var(--max) - 20px); margin:0 auto;
+  background:var(--ink); color:#fff; border-radius:12px; padding:13px 14px;
+  display:flex; align-items:center; gap:12px; box-shadow:0 12px 34px rgba(6,34,46,.34);
+  animation:ibUp .35s ease}
+@keyframes ibUp{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.ib-ico{width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--gilt)}
+.ib-tx{flex:1;min-width:0;line-height:1.3}
+.ib-tx b{display:block;font-size:13.5px;font-weight:600;color:#fff}
+.ib-tx span{font-size:11.5px;color:rgba(255,255,255,.62)}
+.ib-btn{flex-shrink:0;background:var(--gilt);color:#fff;border:none;border-radius:8px;
+  padding:10px 16px;font-size:13px;font-weight:700;white-space:nowrap}
+.ib-btn:active{opacity:.85}
+.ib-x{position:absolute;top:-9px;right:-9px;width:24px;height:24px;border-radius:50%;
+  background:#fff;color:var(--ink);border:1px solid var(--line);font-size:15px;line-height:1;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+/* iOS instruction variant */
+.ib.ios .ib-step{flex-shrink:0;font-size:11.5px;color:rgba(255,255,255,.72);display:flex;align-items:center;gap:5px}
+.ib.ios .ib-share-ic{width:17px;height:17px;color:#fff}
+/* downward arrow pointing to Safari share (variant A) */
+.ib-arrow{position:fixed; left:50%; transform:translateX(-50%);
+  bottom:6px; z-index:80; color:var(--gilt); animation:ibBounce 1.2s ease-in-out infinite}
+@keyframes ibBounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
+
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -681,6 +708,17 @@ img{display:block; max-width:100%}
     <button data-nav="orders" onclick="go('orders')"><span class="nico" id="ni-orders"></span>Orders</button>
     <button data-nav="profile" onclick="go('profile')"><span class="nico" id="ni-profile"></span>Profile</button>
   </nav>
+
+  <!-- install banner (brand) -->
+  <div class="ib" id="ib" style="display:none">
+    <button class="ib-x" onclick="ibDismiss()" aria-label="Close">×</button>
+    <div class="ib-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 12c2-3 5.5-4.5 8.5-4.5 2.5 0 4.5.8 6 2l1.5-1.5-.4 4 .4 4-1.5-1.5c-1.5 1.2-3.5 2-6 2-3 0-6.5-1.5-8.5-4.5z"/><circle cx="13" cy="11" r=".6"/></svg></div>
+    <div class="ib-tx"><b>Add Ocean Basket to your home screen</b><span id="ib-sub">Quick access, full screen — like an app.</span></div>
+    <button class="ib-btn" id="ib-action" onclick="ibInstall()">Install</button>
+  </div>
+  <div class="ib-arrow" id="ib-arrow" style="display:none">
+    <svg width="30" height="38" viewBox="0 0 30 38" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3v28"/><path d="M6 22l9 9 9-9"/></svg>
+  </div>
 
 </div>
 <div class="toast" id="toast"></div>
@@ -1949,22 +1987,59 @@ function renderTbSuccess(orderNo, outlet){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('./sw.js').catch(function(){});
   });
+  window.addEventListener('load', function(){ setTimeout(showInstallBanner, 900); });
 })();
 
-/* ---------- install prompt (Android/Chrome) ---------- */
-var deferredPrompt=null;
-window.addEventListener('beforeinstallprompt', function(e){
-  e.preventDefault(); deferredPrompt=e;
-  var b=el('install-fab'); if(b) b.style.display='flex';
-});
-function triggerInstall(){
-  if(deferredPrompt){
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function(){ deferredPrompt=null; var b=el('install-fab'); if(b) b.style.display='none'; });
-  } else {
-    toast('On iPhone: tap Share, then Add to Home Screen');
+
+/* ===== install banner logic ===== */
+var _bipEvent=null, _ibArrow=false;   // _ibArrow: show arrow on iOS (toggle for design choice)
+function isStandalone(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone===true;
+}
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function isIOSSafari(){ return isIOS() && !/crios|fxios|edgios/i.test(navigator.userAgent); }
+function ibDismissed(){ try{ return localStorage.getItem('ob_ib_dismissed')==='1'; }catch(e){ return false; } }
+function ibDismiss(){ try{ localStorage.setItem('ob_ib_dismissed','1'); }catch(e){} var b=el('ib'),a=el('ib-arrow'); if(b)b.style.display='none'; if(a)a.style.display='none'; }
+function ibInstall(){
+  if(_bipEvent){ _bipEvent.prompt(); _bipEvent.userChoice.then(function(){ _bipEvent=null; ibDismiss(); }); }
+}
+function showInstallBanner(){
+  if(isStandalone() || ibDismissed()) return;          // already installed or dismissed
+  var b=el('ib'); if(!b) return;
+  if(isIOS()){
+    // iOS: cannot auto-install — show instruction (+ optional arrow to Safari share)
+    b.classList.add('ios');
+    el('ib-sub').innerHTML = 'Tap '+
+      '<svg class="ib-share-ic" style="display:inline;vertical-align:-3px" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>'+
+      ' below, then \u201CAdd to Home Screen\u201D';
+    var act=el('ib-action'); if(act) act.style.display='none';   // no install button on iOS
+    b.style.display='flex';
+    var arrow=el('ib-arrow'); if(arrow) arrow.style.display = _ibArrow ? 'block' : 'none';
+  } else if(_bipEvent){
+    // Android/Chrome with install support
+    b.style.display='flex';
   }
 }
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault(); _bipEvent=e; showInstallBanner();
+});
+window.addEventListener('appinstalled', function(){ ibDismiss(); });
+
+/* ---- design preview helpers (for choosing arrow variant) ---- */
+function ibPreview(withArrow){
+  _ibArrow = withArrow;
+  try{ localStorage.removeItem('ob_ib_dismissed'); }catch(e){}
+  // force iOS-style render regardless of platform, for preview
+  var b=el('ib'); if(!b) return;
+  b.classList.add('ios');
+  el('ib-sub').innerHTML = 'Tap '+
+    '<svg class="ib-share-ic" style="display:inline;vertical-align:-3px" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>'+
+    ' below, then \u201CAdd to Home Screen\u201D';
+  var act=el('ib-action'); if(act) act.style.display='none';
+  b.style.display='flex';
+  var arrow=el('ib-arrow'); if(arrow) arrow.style.display = withArrow ? 'block' : 'none';
+}
+
 
 /* ---------- INIT ---------- */
 ['home','shop','cart','orders','profile'].forEach(function(n){
