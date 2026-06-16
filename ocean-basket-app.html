@@ -1255,6 +1255,21 @@ function placeOrder(){
   if(el('f-address')) state.customer.address=el('f-address').value.trim();
   if(state.fulfil==='delivery' && !state.customer.address){ toast('Please add a delivery address'); return; }
 
+  // POZIOM 1: if collecting from a point, every cart line must be in that point's stock.
+  if(state.fulfil==='pickup'){
+    if(!state.point){ toast('Please choose a collection point'); return; }
+    var avail = state.availability || {};
+    var missing = state.cart.filter(function(it){ return (avail[it.formId]||0) < (it.grams/1000) - 1e-9; });
+    if(missing.length){
+      var pt=(POINTS.find(function(p){return p.n===state.point})||{}).name||'this point';
+      var names=missing.map(function(it){ return it.name+' ('+it.formLabel+')'; }).join(', ');
+      toast(names+' not available at '+pt);
+      // bounce them back to the point screen so they can switch point or edit cart
+      go('cart');
+      return;
+    }
+  }
+
   var sub=cartSubtotal();
   var deliveryFee = state.fulfil==='delivery' ? (sub>=CFG.freeFrom?0:CFG.deliveryFee) : 0;
   var total=sub+deliveryFee;
@@ -1278,20 +1293,35 @@ function placeOrder(){
 
   fetch(API_BASE+'/orders',{
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
-  }).then(function(r){ return r.json(); }).then(function(res){
-    if(res && res.order_no){ order.no=res.order_no; if(res.total!=null) order.total=res.total; }
-    saveOrderNo(order.no);
-    state.orders.unshift(order);
-    renderSuccess(order);
-    state.cart=[]; updateCartBadge();
-    go('success');
+  }).then(function(r){ return r.json().then(function(res){ return {ok:r.ok, status:r.status, res:res}; }); })
+  .then(function(o){
+    var res=o.res;
+    // Server rejected because items aren't in the point's reserved stock
+    if(o.status===409 && res && res.error==='out_of_stock_at_point'){
+      if(btn){ btn.disabled=false; btn.textContent='Place order'; }
+      var pt=(POINTS.find(function(p){return p.n===state.point})||{}).name||'this point';
+      var names=(res.shortages||[]).map(function(s){ return s.item; }).join(', ');
+      toast((names||'Some items')+' not available at '+pt);
+      // refresh availability for this point so the shop reflects reality
+      if(state.point){ loadAvailability(state.point).then(function(){ go('cart'); }); } else { go('cart'); }
+      return;
+    }
+    if(o.ok && res && res.order_no){
+      order.no=res.order_no; if(res.total!=null) order.total=res.total;
+      saveOrderNo(order.no);
+      state.orders.unshift(order);
+      renderSuccess(order);
+      state.cart=[]; updateCartBadge();
+      go('success');
+      return;
+    }
+    // any other server error — show it, do NOT fake success
+    if(btn){ btn.disabled=false; btn.textContent='Place order'; }
+    toast((res && res.error) ? ('Could not place order: '+res.error) : 'Could not place order, please try again');
   }).catch(function(err){
     console.error('Order error:', err);
-    /* still show success locally so the demo flow completes */
-    state.orders.unshift(order);
-    renderSuccess(order);
-    state.cart=[]; updateCartBadge();
-    go('success');
+    if(btn){ btn.disabled=false; btn.textContent='Place order'; }
+    toast('Network problem — order not placed. Please try again.');
   });
 }
 
