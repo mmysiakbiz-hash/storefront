@@ -7,8 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500..700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#06222e; --ink2:#0d3b4f; --char:#23262b;
-  --gilt:#9c7c4a; --pink:#b5573a;
+  --ink:#0a1140; --ink2:#15206b; --char:#23262b;
+  --gilt:#1ba8d3; --pink:#b5573a;
   --paper:#faf7f0; --paper2:#f1ece1; --line:#e4ddcf;
   --fresh:#3f7a5a; --fresh-bg:#edf3ee; --frozen:#3f6e9e; --frozen-bg:#eef2f6;
   --mut:#857f74; --ok:#3f7a5a;
@@ -401,7 +401,7 @@ function renderPoints(){
   var host=el('p-points');
   var rows=state.points.map(function(p){
     return '<div class="point-row">'+
-      '<span class="num" style="background:'+(p.colour||'#06222e')+'">'+p.number+'</span>'+
+      '<span class="num" style="background:'+(p.colour||'#0a1140')+'">'+p.number+'</span>'+
       '<div class="pi"><h3>'+p.name+(p.is_outlet?' <span style="font-size:10px;color:var(--gilt)">· outlet</span>':'')+(p.active?'':' <span class="badge off">off</span>')+'</h3><p>'+(p.description||'')+'</p></div>'+
       '<button class="btn ghost sm" onclick="editPoint('+p.number+')">Edit</button>'+
     '</div>';
@@ -415,7 +415,7 @@ function editPoint(num){
   el('modal').innerHTML='<h2>'+(p?'Edit point':'Add point')+'</h2>'+
     '<div class="grid2">'+
       '<div class="field"><label>Number</label><input type="number" id="pt-num" value="'+(p?p.number:nextNum)+'"></div>'+
-      '<div class="field"><label>Colour</label><input type="color" id="pt-col" value="'+(p&&p.colour||'#06222e')+'" style="height:44px;padding:4px"></div>'+
+      '<div class="field"><label>Colour</label><input type="color" id="pt-col" value="'+(p&&p.colour||'#0a1140')+'" style="height:44px;padding:4px"></div>'+
     '</div>'+
     '<div class="field"><label>Name</label><input id="pt-name" value="'+(p&&p.name||'')+'" placeholder="Beau Vallon"></div>'+
     '<div class="field"><label>Description</label><input id="pt-desc" value="'+(p&&p.description||'')+'" placeholder="Shop · open till 18:00"></div>'+
@@ -502,7 +502,7 @@ function renderStock(){
       '</div>';
     }).join('');
     return '<div class="card">'+
-      '<div class="stock-head"><span class="num" style="background:'+(pt.colour||'#06222e')+'">'+pt.number+'</span>'+
+      '<div class="stock-head"><span class="num" style="background:'+(pt.colour||'#0a1140')+'">'+pt.number+'</span>'+
         '<h3>'+pt.name+'</h3>'+
         '<button class="btn ghost sm" onclick="addStock('+pt.number+')">+ Add stock</button></div>'+
       (rows || '<div class="muted" style="font-size:13px;padding:8px 0">Nothing stocked here yet.</div>')+

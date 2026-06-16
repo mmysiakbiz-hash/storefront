@@ -1,16 +1,31 @@
 {
   "name": "Ocean Basket Seychelles",
   "short_name": "Ocean Basket",
-  "description": "Fresh fish, delivered across Mahé.",
+  "description": "Fresh fish, delivered across Mah\u00e9.",
   "start_url": "./ocean-basket-app.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#06222e",
-  "theme_color": "#06222e",
+  "background_color": "#ffffff",
+  "theme_color": "#0a1140",
   "orientation": "portrait",
   "icons": [
-    { "src": "./ob-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./ob-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./ob-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "./ob-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./ob-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./ob-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
