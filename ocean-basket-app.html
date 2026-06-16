@@ -1778,7 +1778,7 @@ function tbSetDest(code){
 }
 function tbValidateFlight(){
   var t=state.tb;
-  t.airline=el('tb-air').value; t.flightNo=el('tb-fno').value.trim();
+  t.flightNo=el('tb-fno').value.trim();
   t.date=el('tb-date').value; t.time=el('tb-time').value;
   if(!t.dest){ toast('Please choose a destination'); return; }
   if(!t.airline||!t.flightNo){ toast('Please add airline and flight number'); return; }
