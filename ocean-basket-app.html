@@ -419,9 +419,17 @@ img{display:block; max-width:100%}
 .chat-hand .ha .call{background:var(--ink); color:var(--paper)}
 .chat-hand .ha .wa{background:#fff; border:1px solid var(--line); color:var(--ink)}
 .chat-hand .ha .ic{width:16px;height:16px}
-.chat-quick{border-top:1px solid var(--line); background:var(--paper); padding:14px 18px; display:flex; gap:8px; flex-wrap:wrap}
-.chat-quick button{padding:9px 14px; border:1px solid var(--line); border-radius:20px; background:#fff; font-size:12.5px; font-weight:500; color:var(--char); white-space:nowrap}
-.chat-quick button:active{background:var(--paper2)}
+.chat-quick{border-top:1px solid var(--line); background:var(--paper); padding:12px 16px 14px; max-height:42vh; overflow-y:auto}
+.cq-head{font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--mut); margin:0 2px 8px}
+.cq-cats{display:flex; gap:7px; flex-wrap:wrap}
+.cq-cat{display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border:1px solid var(--line); border-radius:20px; background:#fff; font-size:12.5px; font-weight:600; color:var(--char)}
+.cq-cat.on{background:var(--ink); color:#fff; border-color:var(--ink)}
+.cq-cat .cq-x{font-size:14px; line-height:1; opacity:.7}
+.cq-qs{display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line)}
+.cq-qs button{text-align:left; padding:11px 13px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:13.5px; font-weight:500; color:var(--char); line-height:1.35}
+.cq-qs button:active{background:var(--paper2)}
+.chat-quick .chat-human{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:12px; padding:12px; border:none; border-radius:8px; background:var(--gilt); color:#fff; font-size:13.5px; font-weight:600}
+.chat-quick .chat-human .ic{width:15px;height:15px}
 .chat-typing{display:flex; gap:4px; padding:14px 16px}
 .chat-typing span{width:7px;height:7px;border-radius:50%;background:var(--mut);opacity:.4;animation:blink 1.2s infinite}
 .chat-typing span:nth-child(2){animation-delay:.2s}
@@ -454,8 +462,6 @@ img{display:block; max-width:100%}
 .avail-bar button{margin-left:auto;font-size:12px;font-weight:600;color:var(--ink2);text-decoration:underline}
 
 
-.chat-cat{width:100%; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mut); margin:6px 2px 2px}
-.chat-quick .chat-human{background:var(--ink); color:#fff; border-color:var(--ink)}
 
 
 /* ===== Leaflet real map ===== */
@@ -471,6 +477,31 @@ img{display:block; max-width:100%}
 
 .pts-head{font-family:'Bodoni Moda',serif; font-size:24px; font-weight:600; color:var(--ink); line-height:1.15; margin:2px 0 4px}
 .pts-sub{font-size:14px; color:var(--char); font-weight:500; margin:0}
+
+
+/* ===== custom dropdown (brand) ===== */
+.obsel{position:relative; width:100%}
+.obsel-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:14px 14px; border:1px solid var(--line); border-radius:4px; background:#fff;
+  font-size:14px; font-family:inherit; font-weight:500; color:var(--char); text-align:left; cursor:pointer; min-height:50px}
+.obsel-btn .obsel-val.placeholder{color:#9a948b}
+.obsel-btn.open{border-color:var(--gilt)}
+.obsel-btn .obsel-caret{flex-shrink:0; transition:transform .18s; color:#6f6962}
+.obsel-btn.open .obsel-caret{transform:rotate(180deg)}
+.obsel-menu{position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:60;
+  background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 12px 30px rgba(6,34,46,.16);
+  max-height:280px; overflow-y:auto; padding:5px; opacity:0; transform:translateY(-6px); pointer-events:none; transition:opacity .15s, transform .15s}
+.obsel-menu.open{opacity:1; transform:none; pointer-events:auto}
+.obsel-opt{display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px 12px; border-radius:4px; font-size:14px; color:var(--char); cursor:pointer; line-height:1.3}
+.obsel-opt:hover{background:var(--paper2)}
+.obsel-opt.sel{background:var(--paper2)}
+.obsel-opt.sel .obsel-optmain{font-weight:700; color:var(--ink)}
+.obsel-opt.dis{opacity:.45; cursor:not-allowed}
+.obsel-opt .obsel-optsub{font-size:12px; color:var(--mut); font-weight:500; flex-shrink:0}
+.obsel-opt .obsel-tick{color:var(--gilt); flex-shrink:0; opacity:0}
+.obsel-opt.sel .obsel-tick{opacity:1}
+.obsel-backdrop{position:fixed; inset:0; z-index:55; background:transparent}
 
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -515,7 +546,6 @@ img{display:block; max-width:100%}
       <h2>Choose Fish</h2>
     </div>
     <div class="searchbar"><input id="search" placeholder="Search species…" oninput="renderSpecies()"></div>
-    <div class="cats" id="cats"></div>
     <div id="avail-banner" style="display:none"></div>
     <div id="species-host"></div>
   </section>
@@ -924,18 +954,60 @@ function renderAvailBanner(){
 }
 function clearAvailFilter(){ state.availFilter=false; state.availability=null; renderAvailBanner(); renderSpecies(); }
 
-function renderCats(){
-  el('cats').innerHTML = CATS.map(function(c){
-    return '<button class="chip'+(state.cat===c.id?' on':'')+'" onclick="setCat(\''+c.id+'\')">'+c.label+'</button>';
-  }).join('');
-}
+function renderCats(){ /* categories removed — catalogue is all fish */ }
 function setCat(id){ state.cat=id; renderCats(); renderSpecies(); }
+
+
+/* ===== custom dropdown component ===== */
+var _obselOpen=null;
+function obSelectHTML(id, options, selectedValue, placeholder){
+  var sel = options.filter(function(o){ return String(o.value)===String(selectedValue); })[0];
+  var valHtml = sel ? ('<span class="obsel-val">'+sel.label+(sel.sub?(' <span class="obsel-optsub">'+sel.sub+'</span>'):'')+'</span>')
+                    : ('<span class="obsel-val placeholder">'+(placeholder||'Select…')+'</span>');
+  var caret = '<svg class="obsel-caret" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>';
+  var opts = options.map(function(o){
+    var cls='obsel-opt'+(String(o.value)===String(selectedValue)?' sel':'')+(o.disabled?' dis':'');
+    var sub = o.sub ? '<span class="obsel-optsub">'+o.sub+'</span>' : '';
+    var tick = '<svg class="obsel-tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg>';
+    var oval = (''+o.value).replace(/'/g,"&#39;");
+    return '<div class="'+cls+'" '+(o.disabled?'':'onclick="obSelectPick(\''+id+'\',\''+oval+'\')"')+'>'+
+             '<span class="obsel-optmain">'+o.label+'</span>'+
+             '<span style="display:flex;align-items:center;gap:8px">'+sub+tick+'</span>'+
+           '</div>';
+  }).join('');
+  return '<div class="obsel" id="'+id+'">'+
+    '<button type="button" class="obsel-btn" onclick="obSelectToggle(\''+id+'\')">'+valHtml+caret+'</button>'+
+    '<div class="obsel-menu" id="'+id+'-menu">'+opts+'</div>'+
+  '</div>';
+}
+window._obselCallbacks = window._obselCallbacks || {};
+function obSelectToggle(id){
+  var box=document.getElementById(id); if(!box) return;
+  var btn=box.querySelector('.obsel-btn'), menu=document.getElementById(id+'-menu');
+  var isOpen=menu.classList.contains('open');
+  obSelectCloseAll();
+  if(!isOpen){
+    menu.classList.add('open'); btn.classList.add('open'); _obselOpen=id;
+    var bd=document.createElement('div'); bd.className='obsel-backdrop'; bd.id='obsel-bd';
+    bd.onclick=obSelectCloseAll; document.body.appendChild(bd);
+  }
+}
+function obSelectCloseAll(){
+  document.querySelectorAll('.obsel-menu.open').forEach(function(m){ m.classList.remove('open'); });
+  document.querySelectorAll('.obsel-btn.open').forEach(function(b){ b.classList.remove('open'); });
+  var bd=document.getElementById('obsel-bd'); if(bd) bd.remove();
+  _obselOpen=null;
+}
+function obSelectPick(id, value){
+  obSelectCloseAll();
+  var cb=window._obselCallbacks[id];
+  if(cb) cb(value);
+}
 
 /* ---------- SHOP: species list ---------- */
 function renderSpecies(){
   var q = (el('search')?el('search').value:'').trim().toLowerCase();
   var list = CATALOG.filter(function(s){
-    if(state.cat!=='all' && s.cat!==state.cat) return false;
     if(q && !(s.name.toLowerCase().indexOf(q)>-1 || (s.local||'').toLowerCase().indexOf(q)>-1)) return false;
     return true;
   });
@@ -1009,11 +1081,12 @@ function renderProduct(){
     return '<button class="'+(c.people===p?'on':'')+'" onclick="setPeople('+p+')">'+p+'</button>';
   }).join('');
 
-  var formOpts = s.forms.map(function(f,i){
+  var formOptions = s.forms.map(function(f,i){
     var kg = availKg(f.id);
-    var suffix = (kg!=null) ? (kg>0 ? '  · '+kg+' kg left' : '  · sold out here') : '';
-    return '<option value="'+i+'"'+(i===c.formIdx?' selected':'')+'>'+f.label+'  ('+money(f.price)+'/kg)'+suffix+'</option>';
-  }).join('');
+    var sub = (kg!=null) ? (kg>0 ? kg+' kg left' : 'sold out here') : (money(f.price)+'/kg');
+    var dis = (kg!=null && kg<=0);
+    return { value:i, label:f.label+'  ·  '+money(f.price)+'/kg', sub:sub, disabled:dis };
+  });
 
   el('product-host').innerHTML =
     '<div class="prod-img"><span class="fishline-lg">'+svg(iconFor(s),130,1)+'</span><button class="fav" onclick="toast(\'Saved\')">'+svg('heart',20,1.4)+'</button></div>'+
@@ -1030,7 +1103,7 @@ function renderProduct(){
     '</div>'+
     '<div class="cfg">'+
       '<div class="cfg-block"><label>Product form</label>'+
-        '<select class="selectbox" onchange="setForm(this.value)">'+formOpts+'</select></div>'+
+        obSelectHTML('sel-form', formOptions, c.formIdx, 'Choose a cut')+'</div>'+
       '<div class="cfg-block"><label>Number of people</label>'+
         '<div class="seg">'+peopleOpts+'</div>'+
         '<div class="people-hint">'+svg('check',15,1.6)+' Serves about '+c.people+' — we suggest '+fmtKg(suggestedGrams(c.people))+'</div></div>'+
@@ -1060,6 +1133,7 @@ function renderProduct(){
     '</div>';
 }
 function setForm(i){ state.cfg.formIdx=parseInt(i,10); renderProduct(); }
+window._obselCallbacks['sel-form']=function(v){ setForm(v); };
 function setPeople(p){
   state.cfg.people=p;
   var g=suggestedGrams(p);
@@ -1531,18 +1605,25 @@ function initChat(){
   chatBot("Hello — I'm the Ocean Basket assistant. I can help with orders, delivery, collection points and Travel Box. What would you like to know?");
   renderChatQuick();
 }
+var _chatOpenCat=null;
+function chatCats(){
+  var cats=[]; CHAT_KB.forEach(function(k){ if(cats.indexOf(k.cat)===-1) cats.push(k.cat); }); return cats;
+}
+function toggleChatCat(cat){ _chatOpenCat = (_chatOpenCat===cat)?null:cat; renderChatQuick(); }
 function renderChatQuick(){
-  // group questions by category for a tidy quick-reply panel
-  var cats=[];
-  CHAT_KB.forEach(function(k){ if(cats.indexOf(k.cat)===-1) cats.push(k.cat); });
-  var html='';
-  cats.forEach(function(cat){
-    html+='<div class="chat-cat">'+cat+'</div>';
-    CHAT_KB.forEach(function(k,i){
-      if(k.cat===cat){ html+='<button onclick="chatAsk('+i+')">'+k.q+'</button>'; }
-    });
+  var html='<div class="cq-head">Popular questions</div><div class="cq-cats">';
+  chatCats().forEach(function(cat){
+    var on=_chatOpenCat===cat;
+    html+='<button class="cq-cat'+(on?' on':'')+'" onclick="toggleChatCat(\''+cat.replace(/'/g,"&#39;")+'\')">'+cat+
+      '<span class="cq-x">'+(on?'\u2212':'+')+'</span></button>';
   });
-  html+='<div class="chat-cat">Need more?</div><button class="chat-human" onclick="chatHandover()">Talk to a person</button>';
+  html+='</div>';
+  if(_chatOpenCat){
+    html+='<div class="cq-qs">';
+    CHAT_KB.forEach(function(k,i){ if(k.cat===_chatOpenCat){ html+='<button onclick="chatAsk('+i+')">'+k.q+'</button>'; } });
+    html+='</div>';
+  }
+  html+='<button class="chat-human" onclick="chatHandover()">'+svg('chat',15,1.5)+' Talk to a person</button>';
   el('chat-quick').innerHTML=html;
 }
 function chatRow(who, html){
@@ -1622,12 +1703,8 @@ function tbStart(){ renderTbFlight(); go('tb-flight'); }
 /* ----- screen 2: flight details ----- */
 function renderTbFlight(){
   var t=state.tb;
-  var destOpts='<option value="">Select destination</option>'+TB_DEST.map(function(d){
-    return '<option value="'+d.code+'"'+(t.dest===d.code?' selected':'')+'>'+d.label+'</option>';
-  }).join('');
-  var airOpts='<option value="">Select airline</option>'+TB_AIRLINES.map(function(a){
-    return '<option value="'+a+'"'+(t.airline===a?' selected':'')+'>'+a+'</option>';
-  }).join('');
+  var destOptions = TB_DEST.map(function(d){ return { value:d.code, label:d.label, sub:(d.kg+' kg') }; });
+  var airOptions = TB_AIRLINES.map(function(a){ return { value:a, label:a }; });
   var dest=TB_DEST.find(function(d){return d.code===t.dest});
   var allowanceBlock = dest
     ? '<div class="allowance-card"><span class="ac-ic">'+svg('check',26,1.5)+'</span>'+
@@ -1637,8 +1714,8 @@ function renderTbFlight(){
 
   el('tb-flight-host').innerHTML='<div class="pad">'+
     '<p class="muted" style="font-size:13px;margin-bottom:18px">We check your flight and baggage allowance before you shop, so your box is always travel-legal.</p>'+
-    '<div class="field"><label>Destination</label><select class="selectbox" id="tb-dest" onchange="tbSetDest(this.value)">'+destOpts+'</select></div>'+
-    '<div class="field"><label>Airline</label><select class="selectbox" id="tb-air" onchange="state.tb.airline=this.value">'+airOpts+'</select></div>'+
+    '<div class="field"><label>Destination</label>'+obSelectHTML('sel-dest', destOptions, t.dest||'', 'Select destination')+'</div>'+
+    '<div class="field"><label>Airline</label>'+obSelectHTML('sel-air', airOptions, t.airline||'', 'Select airline')+'</div>'+
     '<div class="field"><label>Flight number</label><input id="tb-fno" placeholder="e.g. HM 708" value="'+(t.flightNo||'')+'"></div>'+
     '<div class="field"><label>Departure date</label><input id="tb-date" type="date" value="'+(t.date||'')+'"></div>'+
     '<div class="field"><label>Departure time</label><input id="tb-time" type="time" value="'+(t.time||'')+'"></div>'+
@@ -1646,6 +1723,8 @@ function renderTbFlight(){
     '</div>'+
     '<div class="sticky-foot"><button class="btn" onclick="tbValidateFlight()">Validate &amp; continue</button></div>';
 }
+window._obselCallbacks['sel-dest']=function(v){ tbSetDest(v); };
+window._obselCallbacks['sel-air']=function(v){ state.tb.airline=v; var b=document.querySelector('#sel-air .obsel-val'); if(b){ b.textContent=v; b.classList.remove('placeholder'); } };
 function tbSetDest(code){
   state.tb.dest=code;
   var d=TB_DEST.find(function(x){return x.code===code});
