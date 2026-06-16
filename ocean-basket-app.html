@@ -454,7 +454,20 @@ img{display:block; max-width:100%}
 .chat-cat{width:100%; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mut); margin:6px 2px 2px}
 .chat-quick .chat-human{background:var(--ink); color:#fff; border-color:var(--ink)}
 
+
+/* ===== Leaflet real map ===== */
+.leaflet-wrap{margin:0 18px 12px; height:300px; border:1px solid var(--line); border-radius:6px; overflow:hidden; z-index:0}
+.leaflet-wrap .leaflet-control-attribution{font-size:9px}
+.ob-pin-dot{width:26px; height:26px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:700; font-family:'Outfit',sans-serif; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.ob-pin-dot{position:relative}
+.ob-pin .ob-pin-dot{}
+.ob-pin-dot span{transform:rotate(45deg); display:block; line-height:1}
+/* the number sits upright inside the rotated pin */
+.ob-pin-dot{}
+
 </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 <div class="app" id="app">
@@ -1130,29 +1143,65 @@ function renderDelivery(){
 function setFulfil(f){ state.fulfil=f; renderDelivery(); }
 
 /* ---------- MAP / collection points ---------- */
+var _map=null, _markers={};
 function renderMap(){
-  var pins = POINTS.map(function(p){
-    return '<div class="pin'+(state.point===p.n?' on':'')+'" style="left:'+p.x+'%;top:'+p.y+'%" onclick="setPoint('+p.n+')">'+
-      '<div class="pin-dot" style="background:'+p.color+'"><span>'+p.n+'</span></div></div>';
-  }).join('');
-
   el('map-host').innerHTML='<div class="pad" style="padding-bottom:10px">'+
     '<p class="muted" style="font-size:13px">Tap a point on the map or pick from the list. Your package label colour matches the point.</p></div>'+
-    '<div class="island-map"><svg class="sea" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">  <path d="M40 8 C46 6 52 9 54 14 C57 13 61 15 63 19 C67 22 70 21 72 25 C70 29 73 32 71 36 C74 40 72 45 70 48 C73 52 71 58 67 62 C69 67 66 73 62 78 C63 84 58 89 53 90 C50 94 44 93 42 88 C38 89 34 86 33 81 C29 79 28 74 30 70 C26 67 27 61 30 58 C26 54 28 48 31 45 C27 41 29 35 32 32 C29 27 32 22 36 19 C34 14 36 10 40 8 Z"    fill="#cde0d6" stroke="#acc4ba" stroke-width="0.8"/>  <path d="M40 8 C46 6 52 9 54 14 C57 13 61 15 63 19 C67 22 70 21 72 25 C70 29 73 32 71 36 C74 40 72 45 70 48 C73 52 71 58 67 62 C69 67 66 73 62 78 C63 84 58 89 53 90 C50 94 44 93 42 88 C38 89 34 86 33 81 C29 79 28 74 30 70 C26 67 27 61 30 58 C26 54 28 48 31 45 C27 41 29 35 32 32 C29 27 32 22 36 19 C34 14 36 10 40 8 Z"    fill="none" stroke="#9bb5ab" stroke-width="0.4" stroke-dasharray="1.5 1.5" opacity="0.5"/></svg>'+pins+'</div>'+
+    '<div id="leaflet-map" class="leaflet-wrap"></div>'+
     '<div class="map-cap">'+svg('pin',15,1.5)+' '+POINTS.length+' collection points across Mahé</div>'+
-    '<div class="pad" style="padding-top:0">'+
+    '<div class="pad" style="padding-top:0" id="point-list">'+
     POINTS.map(function(p){
-      return '<button class="point'+(state.point===p.n?' on':'')+'" onclick="setPoint('+p.n+')">'+
+      return '<button class="point'+(state.point===p.n?' on':'')+'" id="ptbtn-'+p.n+'" onclick="setPoint('+p.n+')">'+
         '<span class="num" style="background:'+p.color+'">'+p.n+'</span>'+
-        '<span class="pc"><h4>'+p.name+(p.outlet?' <span style="font-size:10px;color:var(--gilt)">· outlet</span>':'')+'</h4><p>'+p.desc+'</p></span>'+
+        '<span class="pc"><h4>'+p.name+(p.outlet?' <span style="font-size:10px;color:var(--gilt)">· outlet</span>':'')+'</h4><p>'+(p.desc||'')+'</p></span>'+
         '<span class="chk">'+svg('check',18,1.6)+'</span></button>';
     }).join('')+
     '<button class="btn" style="margin-top:8px" onclick="go(\'delivery\')">Confirm point</button>'+
   '</div>';
+  // build the Leaflet map after the container is in the DOM
+  setTimeout(initLeaflet, 60);
+}
+
+function initLeaflet(){
+  if(typeof L==='undefined'){ return; }            // library not loaded (offline) — list still works
+  var host=document.getElementById('leaflet-map'); if(!host) return;
+
+  // points that actually have coordinates
+  var pts=POINTS.filter(function(p){ return p.lat!=null && p.lng!=null; });
+  var center = pts.length ? [pts[0].lat, pts[0].lng] : [-4.64, 55.45];
+
+  // (re)create the map fresh each time the screen renders
+  if(_map){ _map.remove(); _map=null; _markers={}; }
+  _map = L.map(host, { zoomControl:true, attributionControl:true }).setView([-4.66,55.46], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(_map);
+
+  var bounds=[];
+  pts.forEach(function(p){
+    var icon=L.divIcon({
+      className:'ob-pin',
+      html:'<div class="ob-pin-dot" style="background:'+p.color+'"><span>'+p.n+'</span></div>',
+      iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-26]
+    });
+    var m=L.marker([p.lat,p.lng],{icon:icon}).addTo(_map);
+    m.bindPopup('<b>'+p.name+'</b>'+(p.outlet?' · outlet':'')+'<br>'+(p.desc||''));
+    m.on('click', function(){ setPoint(p.n); });
+    _markers[p.n]=m;
+    bounds.push([p.lat,p.lng]);
+  });
+  if(bounds.length){ _map.fitBounds(bounds, { padding:[40,40], maxZoom:13 }); }
+  // fix tiles not rendering inside a freshly-shown container
+  setTimeout(function(){ if(_map) _map.invalidateSize(); }, 120);
 }
 function setPoint(n){
   state.point=n;
-  renderMap();
+  // update list highlight without rebuilding the whole map (avoids flract)
+  document.querySelectorAll('#point-list .point').forEach(function(b){ b.classList.remove('on'); });
+  var btn=document.getElementById('ptbtn-'+n); if(btn) btn.classList.add('on');
+  // open the marker popup + pan to it
+  if(_map && _markers[n]){ _map.panTo(_markers[n].getLatLng()); _markers[n].openPopup(); }
   // load availability for this point; choosing a point ALWAYS filters the shop,
   // even if the point has no stock (then nothing is shown for that point).
   loadAvailability(n).then(function(av){

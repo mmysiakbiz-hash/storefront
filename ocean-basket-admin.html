@@ -417,9 +417,10 @@ function editPoint(num){
     '<div class="field"><label>Name</label><input id="pt-name" value="'+(p&&p.name||'')+'" placeholder="Beau Vallon"></div>'+
     '<div class="field"><label>Description</label><input id="pt-desc" value="'+(p&&p.description||'')+'" placeholder="Shop · open till 18:00"></div>'+
     '<div class="grid2">'+
-      '<div class="field"><label>Map X (0–100)</label><input type="number" id="pt-x" value="'+(p&&p.x!=null?p.x:50)+'"></div>'+
-      '<div class="field"><label>Map Y (0–100)</label><input type="number" id="pt-y" value="'+(p&&p.y!=null?p.y:50)+'"></div>'+
+      '<div class="field"><label>Latitude</label><input type="number" step="0.000001" id="pt-lat" value="'+(p&&p.lat!=null?p.lat:-4.64)+'"></div>'+
+      '<div class="field"><label>Longitude</label><input type="number" step="0.000001" id="pt-lng" value="'+(p&&p.lng!=null?p.lng:55.45)+'"></div>'+
     '</div>'+
+    '<p class="muted" style="font-size:12px;margin:-6px 0 10px">Tip: on Google Maps, right-click the exact spot → click the coordinates to copy, then paste latitude and longitude here.</p>'+
     '<div class="grid2">'+
       '<div class="field"><label>Travel-box outlet?</label><select id="pt-outlet"><option value="0"'+((!p||!p.is_outlet)?' selected':'')+'>No</option><option value="1"'+((p&&p.is_outlet)?' selected':'')+'>Yes</option></select></div>'+
       '<div class="field"><label>Active</label><select id="pt-active"><option value="1"'+((!p||p.active)?' selected':'')+'>Yes</option><option value="0"'+((p&&!p.active)?' selected':'')+'>No</option></select></div>'+
@@ -439,8 +440,8 @@ function savePoint(origNum){
     description:el('pt-desc').value.trim(),
     colour:el('pt-col').value,
     is_outlet: el('pt-outlet').value==='1',
-    x:parseFloat(el('pt-x').value)||0,
-    y:parseFloat(el('pt-y').value)||0,
+    lat:parseFloat(el('pt-lat').value),
+    lng:parseFloat(el('pt-lng').value),
     active: el('pt-active').value==='1'
   };
   if(!row.name){ toast('Name required'); return; }
