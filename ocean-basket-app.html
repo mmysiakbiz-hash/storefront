@@ -706,6 +706,23 @@ function loadAvailability(pointN){
     .then(function(d){ state.availability = d && d.stock ? d.stock : {}; return state.availability; })
     .catch(function(){ state.availability=null; return null; });
 }
+/* load stock for ALL points at once (used to filter the collection-point list by cart) */
+function loadAllStock(){
+  return fetch(API_BASE+'/availability')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ state.allStock = (d && d.stock) ? d.stock : {}; return state.allStock; })
+    .catch(function(){ state.allStock = {}; return {}; });
+}
+function pointHasFullCart(pointNum){
+  var stock = (state.allStock && state.allStock[pointNum]) ? state.allStock[pointNum] : {};
+  if(!state.cart.length) return true;
+  return state.cart.every(function(it){
+    return (stock[it.formId] || 0) >= (it.grams/1000) - 1e-9;
+  });
+}
+function pointsForCart(){
+  return POINTS.filter(function(p){ return pointHasFullCart(p.n); });
+}
 /* kg available for a given form id at the chosen point; null if no filter active */
 function availKg(formId){
   if(!state.availFilter || !state.availability) return null;
@@ -868,7 +885,7 @@ function go(screen){
   if(screen==='shop'){ renderCats(); renderAvailBanner(); renderSpecies(); }
   if(screen==='cart'){ renderCart(); }
   if(screen==='delivery'){ renderDelivery(); }
-  if(screen==='map'){ renderMap(); }
+  if(screen==='map'){ state.allStock=null; renderMap(); }
   if(screen==='payment'){ renderPayment(); }
   if(screen==='orders'){ renderOrders(); }
   window.scrollTo(0,0);
@@ -1145,12 +1162,32 @@ function setFulfil(f){ state.fulfil=f; renderDelivery(); }
 /* ---------- MAP / collection points ---------- */
 var _map=null, _markers={};
 function renderMap(){
+  if(!state.allStock){
+    el('map-host').innerHTML='<div class="pad"><p class="muted">Loading collection points…</p></div>';
+    loadAllStock().then(renderMap);
+    return;
+  }
+
+  var ok = pointsForCart();
+
+  if(state.cart.length && ok.length===0){
+    el('map-host').innerHTML='<div class="pad">'+
+      '<div class="empty" style="min-height:220px">'+
+        '<div class="bigico">'+svg('pin',54,1)+'</div>'+
+        '<h3>No single point has everything</h3>'+
+        '<p>None of our collection points currently has all the fish in your basket in stock at once.</p>'+
+        '<button class="btn" style="margin-top:10px" onclick="chooseDelivery()">Order with home delivery</button>'+
+        '<button class="btn ghost" style="margin-top:8px" onclick="go(\'cart\')">Edit my basket</button>'+
+      '</div></div>';
+    return;
+  }
+
   el('map-host').innerHTML='<div class="pad" style="padding-bottom:10px">'+
-    '<p class="muted" style="font-size:13px">Tap a point on the map or pick from the list. Your package label colour matches the point.</p></div>'+
+    '<p class="muted" style="font-size:13px">Showing points that have everything in your basket. Your package label colour matches the point.</p></div>'+
     '<div id="leaflet-map" class="leaflet-wrap"></div>'+
-    '<div class="map-cap">'+svg('pin',15,1.5)+' '+POINTS.length+' collection points across Mahé</div>'+
+    '<div class="map-cap">'+svg('pin',15,1.5)+' '+ok.length+' point'+(ok.length===1?' has':'s have')+' your full basket</div>'+
     '<div class="pad" style="padding-top:0" id="point-list">'+
-    POINTS.map(function(p){
+    ok.map(function(p){
       return '<button class="point'+(state.point===p.n?' on':'')+'" id="ptbtn-'+p.n+'" onclick="setPoint('+p.n+')">'+
         '<span class="num" style="background:'+p.color+'">'+p.n+'</span>'+
         '<span class="pc"><h4>'+p.name+(p.outlet?' <span style="font-size:10px;color:var(--gilt)">· outlet</span>':'')+'</h4><p>'+(p.desc||'')+'</p></span>'+
@@ -1158,16 +1195,17 @@ function renderMap(){
     }).join('')+
     '<button class="btn" style="margin-top:8px" onclick="go(\'delivery\')">Confirm point</button>'+
   '</div>';
-  // build the Leaflet map after the container is in the DOM
   setTimeout(initLeaflet, 60);
 }
+function chooseDelivery(){ state.fulfil='delivery'; state.point=null; state.availFilter=false; go('delivery'); }
 
 function initLeaflet(){
   if(typeof L==='undefined'){ return; }            // library not loaded (offline) — list still works
   var host=document.getElementById('leaflet-map'); if(!host) return;
 
-  // points that actually have coordinates
-  var pts=POINTS.filter(function(p){ return p.lat!=null && p.lng!=null; });
+  var allowed = pointsForCart();
+  var allowedNums = {}; allowed.forEach(function(p){ allowedNums[p.n]=true; });
+  var pts=POINTS.filter(function(p){ return allowedNums[p.n] && p.lat!=null && p.lng!=null; });
   var center = pts.length ? [pts[0].lat, pts[0].lng] : [-4.64, 55.45];
 
   // (re)create the map fresh each time the screen renders
