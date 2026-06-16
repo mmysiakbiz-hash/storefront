@@ -450,6 +450,10 @@ img{display:block; max-width:100%}
 .avail-bar b{color:var(--ink)}
 .avail-bar button{margin-left:auto;font-size:12px;font-weight:600;color:var(--ink2);text-decoration:underline}
 
+
+.chat-cat{width:100%; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mut); margin:6px 2px 2px}
+.chat-quick .chat-human{background:var(--ink); color:#fff; border-color:var(--ink)}
+
 </style>
 </head>
 <body>
@@ -716,6 +720,7 @@ function loadCatalog(){
           return {
             id:s.id, productId:s.productId, name:s.name, latin:s.latin, local:s.local,
             cat:'fish', desc:s.desc,
+            minGrams: s.minGrams || null, maxGrams: s.maxGrams || null,
             forms: s.forms.map(function(f){
               return { id:f.id, label:f.label, state:f.state, price:f.price, reserved_kg:f.reserved_kg };
             })
@@ -887,15 +892,30 @@ function renderSpecies(){
     if(q && !(s.name.toLowerCase().indexOf(q)>-1 || (s.local||'').toLowerCase().indexOf(q)>-1)) return false;
     return true;
   });
+  // availability-aware: when a point is chosen, keep only species with in-stock forms there
+  if(state.availFilter && state.availability){
+    list = list.filter(function(s){
+      return s.forms.some(function(f){ return (state.availability[f.id]||0) > 0; });
+    });
+  }
   var host = el('species-host');
-  if(list.length===0){ host.innerHTML='<div class="empty" style="min-height:200px"><div class="bigico">🔍</div><h3>No fish found</h3><p>Try another search.</p></div>'; return; }
-  host.innerHTML = '<div class="species-grid">'+ list.map(function(s){
-    // availability-aware: if filtering, hide species with nothing in stock here
-    if(state.availFilter && state.availability){
-      var anyStock = s.forms.some(function(f){ return (state.availability[f.id]||0) > 0; });
-      if(!anyStock){ return ''; }
+  if(list.length===0){
+    if(state.availFilter){
+      var pt = POINTS.find(function(p){return p.n===state.point;});
+      host.innerHTML='<div class="empty" style="min-height:220px"><div class="bigico">'+svg('pin',54,1)+'</div>'+
+        '<h3>Nothing available here</h3>'+
+        '<p>There\'s no online stock at '+(pt?pt.name:'this point')+' right now.</p>'+
+        '<button class="btn ghost" style="width:auto;margin-top:6px" onclick="clearAvailFilter()">See all fish</button></div>';
+    } else {
+      host.innerHTML='<div class="empty" style="min-height:200px"><div class="bigico">'+svg('search',54,1)+'</div><h3>No fish found</h3><p>Try another search.</p></div>';
     }
-    var minPrice = Math.min.apply(null, s.forms.map(function(f){return f.price}));
+    return;
+  }
+  host.innerHTML = '<div class="species-grid">'+ list.map(function(s){
+    // "from" price excludes fish heads (low-value, skews the headline price)
+    var priceForms = s.forms.filter(function(f){ return !/head/i.test(f.label); });
+    if(priceForms.length===0) priceForms = s.forms;
+    var minPrice = Math.min.apply(null, priceForms.map(function(f){return f.price}));
     var states = {};
     s.forms.forEach(function(f){ states[f.state]=true; });
     var tags = '';
@@ -993,11 +1013,30 @@ function renderProduct(){
     '</div>';
 }
 function setForm(i){ state.cfg.formIdx=parseInt(i,10); renderProduct(); }
-function setPeople(p){ state.cfg.people=p; state.cfg.grams=suggestedGrams(p); renderProduct(); }
-function bumpGrams(d){ state.cfg.grams=Math.max(250, state.cfg.grams+d); renderProduct(); }
+function setPeople(p){
+  state.cfg.people=p;
+  var g=suggestedGrams(p);
+  var s=state.product;
+  if(s && s.minGrams && g<s.minGrams) g=s.minGrams;
+  if(s && s.maxGrams && g>s.maxGrams) g=s.maxGrams;
+  state.cfg.grams=g;
+  renderProduct();
+}
+function bumpGrams(d){
+  var s=state.product;
+  var lo = (s && s.minGrams) ? s.minGrams : 250;
+  var hi = (s && s.maxGrams) ? s.maxGrams : 100000;
+  var g = state.cfg.grams + d;
+  if(g < lo) g = lo;
+  if(g > hi){ g = hi; toast('Maximum for this fish is '+fmtKg(hi)); }
+  state.cfg.grams = g;
+  renderProduct();
+}
 
 function addToCart(){
   var s=state.product, c=state.cfg, form=s.forms[c.formIdx];
+  if(s.minGrams && c.grams < s.minGrams){ toast('Minimum for this fish is '+fmtKg(s.minGrams)); return; }
+  if(s.maxGrams && c.grams > s.maxGrams){ toast('Maximum for this fish is '+fmtKg(s.maxGrams)); return; }
   state.cart.push({
     uid: Date.now()+''+Math.random().toString(36).slice(2,6),
     speciesId:s.id, name:s.name, emoji:s.emoji,
@@ -1114,9 +1153,13 @@ function renderMap(){
 function setPoint(n){
   state.point=n;
   renderMap();
-  // load availability for this point so shopping can be filtered
+  // load availability for this point; choosing a point ALWAYS filters the shop,
+  // even if the point has no stock (then nothing is shown for that point).
   loadAvailability(n).then(function(av){
-    if(av && Object.keys(av).length){ state.availFilter=true; }
+    state.availFilter = true;            // a chosen point always constrains the shop
+    if(state.availability === null) state.availability = {}; // treat fetch error as empty
+    // auto-refresh the shop view if it's open, so banner + list update immediately
+    if(state.screen==='shop'){ renderCats(); renderAvailBanner(); renderSpecies(); }
   });
 }
 
@@ -1311,12 +1354,32 @@ function openSupport(){ initChat(); go('support'); }
 /* controlled assistant: approved Q&A + human handover (spec p.11) */
 var CHAT_CONTACT = { phone:'+248 4 000 000', whatsapp:'2484000000' };
 var CHAT_KB = [
-  { q:'How do I order?', a:'Choose <b>Local Order</b> on the home screen, pick a fish, set the number of people and weight, then choose collection or delivery. It takes about a minute.' },
-  { q:'Delivery fees?', a:'Collection from any of our points is <b>free</b>. Door-to-door delivery on Mahé is <b>SCR 100</b>, and <b>free for orders over SCR 3,000</b>.' },
-  { q:'Where can I collect?', a:'We have 10 collection points across Mahé, including our outlets at Beau Vallon, Victoria, Eden Plaza, Anse Royale and Providence. You choose your point at checkout.' },
-  { q:'Fresh vs frozen?', a:'Everything marked <b>Fresh</b> (green) was landed and never frozen. <b>Frozen</b> (blue) was flash-frozen at sea. Both are prepared to your order.' },
-  { q:'Travel Box?', a:'A <b>Travel Box</b> is airline-compliant, chilled packing for flying with fish. Start it from the home screen — you enter your flight details first, then choose your fish. Collection is at one of our four outlets so you can inspect before sealing.' },
-  { q:'Opening hours?', a:'Our outlets are open until 18:00, and the Providence counter opens from 08:00. Online ordering is available any time.' }
+  // ----- Ordering -----
+  { q:'How do I order?', cat:'Ordering', a:'Choose <b>Local Order</b> on the home screen, pick a fish, set the number of people and weight, then choose collection or delivery. It takes about a minute.' },
+  { q:'How does pricing work?', cat:'Ordering', a:'Fish is priced per kg. You tell us how many people you are feeding and we work out the weight for you — about 250&nbsp;g per person — then show the estimated price before you confirm.' },
+  { q:'Can I choose the cut?', cat:'Ordering', a:'Yes. Most species offer several cuts — whole, fillet, steaks or portions — each with its own price. You pick the cut on the product page.' },
+  { q:'Is there a minimum order?', cat:'Ordering', a:'Each product shows its own minimum and maximum weight on the product page. There is no overall minimum basket — but door-to-door delivery is free over <b>SCR 3,000</b>.' },
+  // ----- Fresh / frozen -----
+  { q:'Fresh vs frozen?', cat:'Products', a:'Everything marked <b>Fresh</b> (green) was landed and never frozen. <b>Frozen</b> (blue) was flash-frozen at sea to lock in quality. Both are prepared to your order.' },
+  { q:'How is the fish prepared?', cat:'Products', a:'We clean and cut your fish to the form you choose (whole, fillet, steaks or portions) after you order, so it is fresh when you collect or we deliver.' },
+  { q:'Which fish do you sell?', cat:'Products', a:'Our current range is Red Snapper (Babonn), Job Fish (Bourzwa), Grouper (Vyey) and Tuna (Ton) — each in fresh and frozen forms, subject to daily stock.' },
+  // ----- Delivery -----
+  { q:'Delivery fees?', cat:'Delivery', a:'Collection from any of our points is <b>free</b>. Door-to-door delivery on Mahé is <b>SCR 100</b>, and <b>free for orders over SCR 3,000</b>.' },
+  { q:'Do you deliver to my area?', cat:'Delivery', a:'We deliver door-to-door across Mahé. Enter your address at checkout — the flat fee is SCR 100, free over SCR 3,000.' },
+  { q:'How fast is delivery?', cat:'Delivery', a:'Orders are prepared fresh and usually ready the same or next day. You will see your order status update from received, to prepared, to on its way.' },
+  // ----- Collection -----
+  { q:'Where can I collect?', cat:'Collection', a:'We have collection points across Mahé, including our outlets at <b>Beau Vallon, Plaisance, STC and Providence</b>, plus freezer points. You choose your point at checkout and only see what is in stock there.' },
+  { q:'How does collection work?', cat:'Collection', a:'Pick a collection point at checkout. When your order is ready you will be notified, and you collect it from that point. Collection is always free.' },
+  { q:'What are your opening hours?', cat:'Collection', a:'Our outlets are open until 18:00, and the Providence counter opens from 08:00. Online ordering is available any time.' },
+  // ----- Travel Box -----
+  { q:'What is a Travel Box?', cat:'Travel Box', a:'A <b>Travel Box</b> is airline-compliant, chilled packing for flying with fish. Start it from the home screen — you enter your flight details first, then choose your fish. Collection is at one of our four outlets so you can inspect before sealing.' },
+  { q:'How much fish can I fly with?', cat:'Travel Box', a:'It depends on your destination — for example Mauritius allows about 7&nbsp;kg, Europe up to 20&nbsp;kg. The app checks your flight and shows your allowance before you shop. Always confirm with your airline too.' },
+  { q:'Where do I collect a Travel Box?', cat:'Travel Box', a:'Travel Boxes can only be collected at our four outlets (Beau Vallon, Plaisance, STC, Providence) so you can inspect the fish before the box is sealed. They are not sent to freezer points.' },
+  { q:'Do I get export documents?', cat:'Travel Box', a:'Yes — your Travel Box includes a commercial invoice, packing list and food-safety declaration. We collect your traveller details for the certificate after you confirm.' },
+  // ----- Payment / general -----
+  { q:'How do I pay?', cat:'Payment', a:'You confirm your order in the app. Online card payment is being set up — in the meantime our team confirms your order and payment by WhatsApp.' },
+  { q:'Can I track my order?', cat:'Payment', a:'Yes — open the <b>Orders</b> tab to see your order and its live status, from received through to ready for collection or delivery.' },
+  { q:'Can I cancel or change an order?', cat:'Payment', a:'For changes, cancellations or refunds, please talk to a person — tap “Talk to a person” below and we will help you directly.' }
 ];
 /* topics that must hand over to a person */
 var CHAT_HANDOVER = ['refund','complaint','wrong','quality','legal','custom','urgent','problem','damaged','cancel'];
@@ -1328,9 +1391,18 @@ function initChat(){
   renderChatQuick();
 }
 function renderChatQuick(){
-  el('chat-quick').innerHTML = CHAT_KB.map(function(k,i){
-    return '<button onclick="chatAsk('+i+')">'+k.q+'</button>';
-  }).join('') + '<button onclick="chatHandover()">Talk to a person</button>';
+  // group questions by category for a tidy quick-reply panel
+  var cats=[];
+  CHAT_KB.forEach(function(k){ if(cats.indexOf(k.cat)===-1) cats.push(k.cat); });
+  var html='';
+  cats.forEach(function(cat){
+    html+='<div class="chat-cat">'+cat+'</div>';
+    CHAT_KB.forEach(function(k,i){
+      if(k.cat===cat){ html+='<button onclick="chatAsk('+i+')">'+k.q+'</button>'; }
+    });
+  });
+  html+='<div class="chat-cat">Need more?</div><button class="chat-human" onclick="chatHandover()">Talk to a person</button>';
+  el('chat-quick').innerHTML=html;
 }
 function chatRow(who, html){
   var wrap=el('chat-wrap');

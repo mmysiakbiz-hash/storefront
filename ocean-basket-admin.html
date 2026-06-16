@@ -118,6 +118,15 @@ a{color:var(--ink)}
 .stock-row .kgunit{font-size:12px;color:var(--mut)}
 .stock-row .del{color:var(--pink);font-size:20px;width:30px;text-align:center}
 
+
+.rep-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.kpi{text-align:center;padding:8px}
+.kpi-n{font-family:'Bodoni Moda',serif;font-size:24px;font-weight:600;color:var(--ink)}
+.kpi-l{font-size:11.5px;color:var(--mut);margin-top:2px}
+.rep-row{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.rep-row:first-child{border-top:none}
+.rep-v{font-weight:700;color:var(--ink)}
+
 </style>
 </head>
 <body>
@@ -155,6 +164,7 @@ a{color:var(--ink)}
     <button data-tab="points" onclick="tab('points')">Collection points</button>
     <button data-tab="stock" onclick="tab('stock')">Stock</button>
     <button data-tab="orders" onclick="tab('orders')">Orders</button>
+    <button data-tab="reports" onclick="tab('reports')">Reports</button>
     <button data-tab="settings" onclick="tab('settings')">Settings</button>
   </div>
   <div class="wrap">
@@ -162,6 +172,7 @@ a{color:var(--ink)}
     <div class="panel" id="p-points"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-stock"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-orders"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-reports"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-settings"><div class="loading">Loading…</div></div>
   </div>
 </div>
@@ -234,7 +245,7 @@ function onLogin(user){
 
 /* ---------- LOAD DATA ---------- */
 function loadAll(){
-  Promise.all([loadProducts(), loadPoints(), loadStock(), loadOrders(), loadSettings()]);
+  Promise.all([loadProducts(), loadPoints(), loadStock(), loadOrders(), loadSettings()]).then(renderReports);
 }
 function loadProducts(){
   return Promise.all([
@@ -302,6 +313,10 @@ function editProduct(pid){
     '</div>'+
     '<div class="field"><label>Short description</label><textarea id="m-desc" rows="2" placeholder="Mild, sweet white flesh…">'+(p&&p.short&&p.short.en||'')+'</textarea></div>'+
     '<div class="field"><label>Visible in app</label><select id="m-active"><option value="1"'+((!p||p.active)?' selected':'')+'>Yes — show</option><option value="0"'+((p&&!p.active)?' selected':'')+'>No — hide</option></select></div>'+
+    '<div class="grid2">'+
+      '<div class="field"><label>Min order (kg)</label><input type="number" step="0.25" id="m-min" value="'+(p&&p.min_grams!=null?(p.min_grams/1000):0.25)+'"></div>'+
+      '<div class="field"><label>Max order (kg)</label><input type="number" step="0.5" id="m-max" value="'+(p&&p.max_grams!=null?(p.max_grams/1000):10)+'"></div>'+
+    '</div>'+
     '<div class="field"><label>Forms &amp; prices</label>'+
       '<div class="form-line" style="font-size:11px;color:var(--mut);margin-bottom:4px"><span>Label</span><span>State</span><span>SCR/kg</span><span></span></div>'+
       '<div id="m-forms"></div>'+
@@ -335,6 +350,7 @@ function codify(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').repl
 function saveProduct(pid){
   var name=el('m-name').value.trim();
   if(!name){ toast('Name is required'); return; }
+  var minKg=parseFloat(el('m-min').value); var maxKg=parseFloat(el('m-max').value);
   var payload={
     store_id:STORE_ID,
     slug: pid ? undefined : slugify(name),
@@ -342,14 +358,16 @@ function saveProduct(pid){
     subtitle:{en:el('m-latin').value.trim()},
     secondary:{en:el('m-local').value.trim()},
     short:{en:el('m-desc').value.trim()},
-    active: el('m-active').value==='1'
+    active: el('m-active').value==='1',
+    min_grams: isNaN(minKg)?null:Math.round(minKg*1000),
+    max_grams: isNaN(maxKg)?null:Math.round(maxKg*1000)
   };
   var forms=window._editForms.filter(function(f){return f.label.trim()});
   forms.forEach(function(f){ if(!f.code) f.code=codify(f.label); });
 
   var p;
   if(pid){
-    p = sb.from('products').update({name:payload.name,subtitle:payload.subtitle,secondary:payload.secondary,short:payload.short,active:payload.active}).eq('id',pid).select().single();
+    p = sb.from('products').update({name:payload.name,subtitle:payload.subtitle,secondary:payload.secondary,short:payload.short,active:payload.active,min_grams:payload.min_grams,max_grams:payload.max_grams}).eq('id',pid).select().single();
   } else {
     p = sb.from('products').insert(payload).select().single();
   }
@@ -584,6 +602,51 @@ function saveSettings(){
     if(res.error){ toast('Error: '+res.error.message); return; }
     state.settings=merged; toast('Settings saved');
   });
+}
+
+
+/* ---------- REPORTS ---------- */
+function renderReports(){
+  var host=el('p-reports'); if(!host) return;
+  var orders=state.orders||[];
+  var paidish=orders.filter(function(o){ return o.status!=='cancelled' && o.status!=='refunded'; });
+
+  // totals
+  var totalRevenue=paidish.reduce(function(s,o){ return s+Number(o.total||0); },0);
+  var totalOrders=orders.length;
+  var cancelled=orders.filter(function(o){ return o.status==='cancelled'||o.status==='refunded'; }).length;
+
+  // fulfilment split
+  var byFulfil={};
+  paidish.forEach(function(o){ var k=o.fulfil_type||'unknown'; byFulfil[k]=(byFulfil[k]||0)+1; });
+
+  // demand per collection point
+  var byPoint={};
+  paidish.forEach(function(o){ if(o.point_number){ byPoint[o.point_number]=(byPoint[o.point_number]||0)+1; } });
+
+  // status breakdown
+  var byStatus={};
+  orders.forEach(function(o){ byStatus[o.status]=(byStatus[o.status]||0)+1; });
+
+  function rows(obj, labelFn){
+    var keys=Object.keys(obj);
+    if(!keys.length) return '<div class="muted" style="font-size:13px">No data yet.</div>';
+    return keys.sort(function(a,b){return obj[b]-obj[a];}).map(function(k){
+      return '<div class="rep-row"><span>'+(labelFn?labelFn(k):k)+'</span><span class="rep-v">'+obj[k]+'</span></div>';
+    }).join('');
+  }
+  function ptLabel(n){ var p=state.points.find(function(x){return x.number==n;}); return p?p.name:('Point '+n); }
+
+  host.innerHTML='<div class="section-head"><h2>Reports</h2><button class="btn ghost sm" onclick="loadOrders().then(renderReports)">Refresh</button></div>'+
+    '<div class="card"><div class="rep-kpis">'+
+      '<div class="kpi"><div class="kpi-n">'+money(totalRevenue)+'</div><div class="kpi-l">Revenue (non-cancelled)</div></div>'+
+      '<div class="kpi"><div class="kpi-n">'+totalOrders+'</div><div class="kpi-l">Total orders</div></div>'+
+      '<div class="kpi"><div class="kpi-n">'+cancelled+'</div><div class="kpi-l">Cancelled / refunded</div></div>'+
+    '</div></div>'+
+    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Orders by fulfilment</h3>'+rows(byFulfil, function(k){return k==='pickup'?'Collection':(k==='delivery'?'Door-to-door':(k==='travelbox'?'Travel Box':k));})+'</div>'+
+    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Demand by collection point</h3>'+rows(byPoint, ptLabel)+'</div>'+
+    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Orders by status</h3>'+rows(byStatus)+'</div>'+
+    '<p class="muted" style="font-size:12px">Note: species & fresh/frozen split will populate as orders accumulate line-item detail.</p>';
 }
 
 /* ---------- TOAST ---------- */
