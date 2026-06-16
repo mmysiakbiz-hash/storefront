@@ -1300,16 +1300,18 @@ function placeOrder(){
   if(state.fulfil==='delivery' && !state.customer.address){ toast('Please add a delivery address'); return; }
 
   // POZIOM 1: if collecting from a point, every cart line must be in that point's stock.
+  // Use allStock[point] (the same source the point list uses) — availability can be null
+  // if loadAvailability hasn't resolved, which would wrongly block a valid order.
   if(state.fulfil==='pickup'){
     if(!state.point){ toast('Please choose a collection point'); return; }
-    var avail = state.availability || {};
+    var avail = (state.allStock && state.allStock[state.point]) ? state.allStock[state.point]
+              : (state.availability || {});
     var missing = state.cart.filter(function(it){ return (avail[it.formId]||0) < (it.grams/1000) - 1e-9; });
     if(missing.length){
       var pt=(POINTS.find(function(p){return p.n===state.point})||{}).name||'this point';
       var names=missing.map(function(it){ return it.name+' ('+it.formLabel+')'; }).join(', ');
       toast(names+' not available at '+pt);
-      // bounce them back to the point screen so they can switch point or edit cart
-      go('cart');
+      go('map');
       return;
     }
   }
