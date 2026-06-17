@@ -127,6 +127,33 @@ a{color:var(--ink)}
 .rep-row:first-child{border-top:none}
 .rep-v{font-weight:700;color:var(--ink)}
 
+
+.btn.sm{padding:8px 12px;font-size:13px;width:auto}
+.pl-block{margin-bottom:16px}
+.pl-h{font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+.pl-h .pl-dot{width:12px;height:12px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.pl-t{width:100%;border-collapse:collapse;font-size:12.5px}
+.pl-t th,.pl-t td{text-align:left;border-bottom:1px solid var(--line);padding:6px 8px}
+.pl-t th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.stk-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stk{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.stk-bar{height:10px}
+.stk-no{font-family:'Bodoni Moda',Didot,Georgia,serif;font-weight:700;font-size:17px;color:var(--ink);padding:8px 10px 0}
+.stk-cust{font-size:13px;font-weight:600;padding:0 10px;color:var(--ink)}
+.stk-rt{font-size:11.5px;color:var(--mut);padding:2px 10px}
+.stk-meta{font-size:11px;color:var(--mut);padding:0 10px 8px}
+#print-area{display:none}
+@media print{
+  body * { visibility:hidden !important; }
+  #print-area, #print-area * { visibility:visible !important; }
+  #print-area{display:block !important;position:absolute;left:0;top:0;width:100%;padding:0 6mm;color:#000}
+  .pa-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px}
+  .pa-head h1{font-size:18px}
+  .pl-t th,.pl-t td{border-bottom:1px solid #999}
+  .stk-grid{grid-template-columns:repeat(2,1fr)}
+  .stk,.pl-block{break-inside:avoid}
+  .stk{border:1px solid #000}
+}
 </style>
 </head>
 <body>
@@ -160,20 +187,26 @@ a{color:var(--ink)}
     <button class="out" onclick="signOut()">Sign out</button>
   </div>
   <div class="tabs">
-    <button class="on" data-tab="products" onclick="tab('products')">Products</button>
-    <button data-tab="points" onclick="tab('points')">Collection points</button>
-    <button data-tab="stock" onclick="tab('stock')">Stock</button>
-    <button data-tab="orders" onclick="tab('orders')">Orders</button>
-    <button data-tab="reports" onclick="tab('reports')">Reports</button>
-    <button data-tab="settings" onclick="tab('settings')">Settings</button>
+    <button class="on" data-tab="dashboard" onclick="tab('dashboard')">Dashboard</button>
+    <button data-tab="scan" onclick="tab('scan')">Scan-In</button>
+    <button data-tab="inventory" onclick="tab('inventory')">Online Reserve</button>
+    <button data-tab="orders" onclick="tab('orders')">Order Monitor</button>
+    <button data-tab="picklists" onclick="tab('picklists')">Pick &amp; Stickers</button>
+    <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
+    <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
+    <button data-tab="shops" onclick="tab('shops')">4-Shop Stock</button>
+    <button data-tab="storyboard" onclick="tab('storyboard')">Storyboard</button>
   </div>
   <div class="wrap">
-    <div class="panel on" id="p-products"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-points"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-stock"><div class="loading">Loading…</div></div>
+    <div class="panel on" id="p-dashboard"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-scan"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-inventory"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-orders"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-reports"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-settings"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-picklists"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-routes"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-storyboard"><div class="loading">Loading…</div></div>
   </div>
 </div>
 
@@ -191,7 +224,7 @@ var ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I
 var STORE_ID='11111111-1111-1111-1111-111111111111';
 var sb = supabase.createClient(SUPABASE_URL, ANON);
 
-var state={ user:null, products:[], forms:[], points:[], orders:[], settings:{}, stock:[] };
+var state={ user:null, products:[], variants:[], drops:[], shops:[], shopStock:[], config:{}, units:[], orders:[], minimums:[], invFilter:'all' };
 function el(id){return document.getElementById(id);}
 function money(n){return 'SCR '+Number(n).toLocaleString('en-US');}
 
@@ -245,32 +278,26 @@ function onLogin(user){
 
 /* ---------- LOAD DATA ---------- */
 function loadAll(){
-  Promise.all([loadProducts(), loadPoints(), loadStock(), loadOrders(), loadSettings()]).then(renderReports);
-}
-function loadProducts(){
-  return Promise.all([
-    sb.from('products').select('*').eq('store_id',STORE_ID).order('position'),
-    sb.from('product_forms').select('*').eq('store_id',STORE_ID).order('position')
-  ]).then(function(r){
-    state.products=r[0].data||[]; state.forms=r[1].data||[];
-    renderProducts();
+  Promise.all([loadCatalog(), loadUnits(), loadOrders(), loadMinimums()]).then(function(){
+    renderDashboard(); renderScan(); renderInventory(); renderOrders(); renderPicklists(); renderRoutes(); renderReplenish(); renderShops(); renderStoryboard();
   });
 }
-function loadPoints(){
-  return sb.from('collection_points').select('*').eq('store_id',STORE_ID).order('number')
-    .then(function(r){ state.points=r.data||[]; renderPoints(); });
+function loadCatalog(){
+  return Promise.all([
+    sb.from('ob_products').select('*').eq('store_id',STORE_ID).order('sort_order'),
+    sb.from('ob_variants').select('*'),
+    sb.from('ob_drop_points').select('*').eq('store_id',STORE_ID).order('sort_order'),
+    sb.from('ob_shops').select('*').eq('store_id',STORE_ID).order('sort_order'),
+    sb.from('ob_config').select('*').eq('store_id',STORE_ID).maybeSingle(),
+    sb.from('ob_shop_stock').select('*')
+  ]).then(function(r){
+    state.products=r[0].data||[]; state.variants=r[1].data||[]; state.drops=r[2].data||[];
+    state.shops=r[3].data||[]; state.config=r[4].data||{}; state.shopStock=r[5].data||[];
+  });
 }
-function loadOrders(opts){
-  return sb.from('orders').select('*').eq('store_id',STORE_ID).order('created_at',{ascending:false}).limit(50)
-    .then(function(r){
-      state.orders=r.data||[]; renderOrders();
-      if(opts && opts.notify){ toast('Updated — '+state.orders.length+' orders'); }
-    });
-}
-function loadSettings(){
-  return sb.from('stores').select('settings,name,currency').eq('id',STORE_ID).single()
-    .then(function(r){ state.settings=(r.data&&r.data.settings)||{}; renderSettings(); });
-}
+function loadUnits(){ return sb.from('ob_stock_units').select('*').eq('store_id',STORE_ID).order('uid').then(function(r){ state.units=r.data||[]; }); }
+function loadOrders(opts){ return sb.from('ob_orders').select('*').eq('store_id',STORE_ID).order('created_at',{ascending:false}).limit(100).then(function(r){ state.orders=r.data||[]; if(opts&&opts.render) renderOrders(); if(opts&&opts.notify) toast('Updated — '+state.orders.length+' orders'); }); }
+function loadMinimums(){ return sb.from('ob_stock_minimums').select('*').eq('store_id',STORE_ID).then(function(r){ state.minimums=r.data||[]; }); }
 
 /* ---------- TABS ---------- */
 function tab(name){
@@ -279,385 +306,230 @@ function tab(name){
   el('p-'+name).classList.add('on');
 }
 
-/* ---------- PRODUCTS ---------- */
-function formsFor(pid){ return state.forms.filter(function(f){return f.product_id===pid}); }
-function renderProducts(){
-  var host=el('p-products');
-  var rows = state.products.map(function(p){
-    var fs=formsFor(p.id);
-    var badges=fs.map(function(f){ return '<span class="badge '+f.state+'">'+f.state+'</span>'; });
-    var uniq={}; var badgeHtml='';
-    if(fs.some(function(f){return f.state==='fresh'})) badgeHtml+='<span class="badge fresh">fresh</span>';
-    if(fs.some(function(f){return f.state==='frozen'})) badgeHtml+='<span class="badge frozen">frozen</span>';
-    if(!p.active) badgeHtml+='<span class="badge off">hidden</span>';
-    var formList=fs.map(function(f){return f.label+' · '+money(f.price)+'/kg'}).join(' · ');
-    return '<div class="prod-row">'+
-      '<div class="pmain"><h3>'+(p.name&&p.name.en||p.slug)+'</h3>'+
-      '<div class="latin">'+(p.subtitle&&p.subtitle.en||'')+(p.secondary&&p.secondary.en?(' · '+p.secondary.en):'')+'</div>'+
-      '<div class="pforms">'+badgeHtml+'<br>'+(formList||'<span style="color:#c0341a">no forms yet</span>')+'</div></div>'+
-      '<button class="btn ghost sm" onclick="editProduct(\''+p.id+'\')">Edit</button>'+
-    '</div>';
-  }).join('');
-  host.innerHTML='<div class="section-head"><h2>Products</h2><button class="btn gilt sm" onclick="editProduct(null)">+ Add fish</button></div>'+
-    '<div class="card">'+(rows||'<div class="empty"><h3>No products</h3><p>Add your first fish.</p></div>')+'</div>';
+/* ================= HELPERS ================= */
+function pname(id){ var p=state.products.filter(function(x){return x.id===id;})[0]; return p?p.name:id; }
+function CUT(c){ return ({whole:'Whole',fillet:'Fillet',portions:'Portions',heads:'Heads',bottle:'Bottle'})[c]||c; }
+function isToday(ts){ if(!ts) return false; var d=new Date(ts), n=new Date(); return d.toDateString()===n.toDateString(); }
+function kpi(n,l){ return '<div class="kpi"><div class="kpi-n">'+n+'</div><div class="kpi-l">'+l+'</div></div>'; }
+function lowStock(){ return state.minimums.filter(function(m){ var have=state.units.filter(function(u){return u.product_id===m.product_id&&u.state===m.state&&u.cut===m.cut&&u.status==='available';}).length; return have < (m.min_count||0); }); }
+
+/* ================= 1. DASHBOARD ================= */
+function renderDashboard(){
+  var u=state.units;
+  var avail=u.filter(function(x){return x.status==='available';}).length;
+  var held=u.filter(function(x){return x.status==='held';}).length;
+  var sold=u.filter(function(x){return x.status==='sold'||x.status==='packed';}).length;
+  var ordToday=state.orders.filter(function(o){return isToday(o.created_at);}).length;
+  var certPending=state.orders.filter(function(o){return o.status==='certificate_pending';}).length;
+  var toPack=state.orders.filter(function(o){return o.status==='paid'||o.status==='preparing';}).length;
+  var low=lowStock().length;
+  var recent=state.orders.slice(0,6).map(function(o){ return '<div class="rep-row"><span>'+o.id+' · '+(o.type||'')+'</span><span class="rep-v">'+money(o.total)+' · '+o.status+'</span></div>'; }).join('') || '<div class="muted" style="font-size:13px">No orders yet.</div>';
+  el('p-dashboard').innerHTML='<div class="section-head"><h2>Dashboard</h2><button class="btn ghost sm" onclick="loadAll()">Refresh</button></div>'+
+    '<div class="card"><div class="rep-kpis">'+kpi(avail,'Available units')+kpi(held,'Held now')+kpi(sold,'Sold / packed')+kpi(ordToday,'Orders today')+kpi(certPending,'Cert. pending')+kpi(low,'Low-stock lines')+'</div></div>'+
+    '<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Today\u2019s priorities</h3>'+
+      '<div class="rep-row"><span>Pack &amp; label paid orders</span><span class="rep-v">'+toPack+'</span></div>'+
+      '<div class="rep-row"><span>Certificates to complete</span><span class="rep-v">'+certPending+'</span></div>'+
+      '<div class="rep-row"><span>Lines below minimum</span><span class="rep-v">'+low+'</span></div></div>'+
+    '<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Recent orders</h3>'+recent+'</div>';
 }
 
-function editProduct(pid){
-  var p = pid ? state.products.find(function(x){return x.id===pid}) : null;
-  var fs = pid ? formsFor(pid) : [];
-  window._editForms = fs.map(function(f){return {id:f.id,code:f.code,label:f.label,state:f.state,price:f.price,active:f.active};});
-  if(!window._editForms.length) window._editForms=[{code:'',label:'',state:'fresh',price:0,active:true}];
-
-  el('modal').innerHTML='<h2>'+(p?'Edit fish':'Add fish')+'</h2>'+
-    '<div class="field"><label>Name (English)</label><input id="m-name" value="'+(p&&p.name&&p.name.en||'')+'" placeholder="Red Snapper"></div>'+
+/* ================= 2. SCAN-IN ================= */
+function renderScan(){
+  var prodOpts=state.products.map(function(p){ return '<option value="'+p.id+'">'+p.name+' ('+(p.code||'')+')</option>'; }).join('');
+  el('p-scan').innerHTML='<div class="section-head"><h2>Scan-In</h2></div>'+
+    '<div class="card"><p class="muted" style="font-size:13px;margin-bottom:14px">Add a physical pack/fish into the Online Reserve. Each unit gets a unique ID and becomes available to customers.</p>'+
     '<div class="grid2">'+
-      '<div class="field"><label>Latin name</label><input id="m-latin" value="'+(p&&p.subtitle&&p.subtitle.en||'')+'" placeholder="Lutjanus bohar"></div>'+
-      '<div class="field"><label>Creole name</label><input id="m-local" value="'+(p&&p.secondary&&p.secondary.en||'')+'" placeholder="Babonn"></div>'+
-    '</div>'+
-    '<div class="field"><label>Short description</label><textarea id="m-desc" rows="2" placeholder="Mild, sweet white flesh…">'+(p&&p.short&&p.short.en||'')+'</textarea></div>'+
-    '<div class="field"><label>Visible in app</label><select id="m-active"><option value="1"'+((!p||p.active)?' selected':'')+'>Yes — show</option><option value="0"'+((p&&!p.active)?' selected':'')+'>No — hide</option></select></div>'+
-    '<div class="grid2">'+
-      '<div class="field"><label>Min order (kg)</label><input type="number" step="0.25" id="m-min" value="'+(p&&p.min_grams!=null?(p.min_grams/1000):0.25)+'"></div>'+
-      '<div class="field"><label>Max order (kg)</label><input type="number" step="0.5" id="m-max" value="'+(p&&p.max_grams!=null?(p.max_grams/1000):10)+'"></div>'+
-    '</div>'+
-    '<div class="field"><label>Forms &amp; prices</label>'+
-      '<div class="form-line" style="font-size:11px;color:var(--mut);margin-bottom:4px"><span>Label</span><span>State</span><span>SCR/kg</span><span></span></div>'+
-      '<div id="m-forms"></div>'+
-      '<button class="btn ghost sm" style="margin-top:6px" onclick="addFormLine()">+ Add form</button>'+
-    '</div>'+
-    '<div class="modal-foot">'+
-      (p?'<button class="btn danger sm" onclick="deleteProduct(\''+p.id+'\')">Delete</button>':'')+
-      '<button class="btn ghost" onclick="closeModal()">Cancel</button>'+
-      '<button class="btn gilt" onclick="saveProduct(\''+(pid||'')+'\')">Save</button>'+
-    '</div>';
-  renderFormLines();
-  el('modal-bg').classList.add('on');
+      '<div class="field"><label>Product</label><select id="sc-prod" onchange="scanCuts()">'+prodOpts+'</select></div>'+
+      '<div class="field"><label>State</label><select id="sc-state" onchange="scanPrice()"><option value="fresh">fresh</option><option value="frozen">frozen</option></select></div>'+
+      '<div class="field"><label>Cut</label><select id="sc-cut" onchange="scanPrice()"></select></div>'+
+      '<div class="field"><label>Weight (kg)</label><input id="sc-weight" type="number" step="0.01" placeholder="1.20"></div>'+
+      '<div class="field"><label>Packs (pack fit)</label><input id="sc-packs" type="number" step="1" placeholder="2"></div>'+
+      '<div class="field"><label>Price / kg</label><input id="sc-price" type="number" step="1" placeholder="620"></div>'+
+      '<div class="field"><label>Batch (optional)</label><input id="sc-batch" placeholder="2026-06-17-AM"></div>'+
+      '<div class="field"><label>Pack ID (blank = auto)</label><input id="sc-uid" placeholder="auto"></div>'+
+    '</div><button class="btn gilt" onclick="doScan()">Scan into reserve</button></div>'+
+    '<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Recently scanned</h3><div id="scan-recent">'+scanRecentRows()+'</div></div>';
+  scanCuts();
 }
-function renderFormLines(){
-  el('m-forms').innerHTML = window._editForms.map(function(f,i){
-    return '<div class="form-line">'+
-      '<input value="'+(f.label||'').replace(/"/g,'&quot;')+'" placeholder="Fresh fillet — skin off" oninput="window._editForms['+i+'].label=this.value">'+
-      '<select onchange="window._editForms['+i+'].state=this.value"><option value="fresh"'+(f.state==='fresh'?' selected':'')+'>Fresh</option><option value="frozen"'+(f.state==='frozen'?' selected':'')+'>Frozen</option></select>'+
-      '<input type="number" value="'+(f.price||0)+'" oninput="window._editForms['+i+'].price=parseFloat(this.value)||0">'+
-      '<button class="del" onclick="removeFormLine('+i+')">×</button>'+
-    '</div>';
-  }).join('');
+function scanCuts(){
+  var pid=el('sc-prod').value; var cuts={};
+  state.variants.filter(function(v){return v.product_id===pid;}).forEach(function(v){ cuts[v.cut]=true; });
+  el('sc-cut').innerHTML=['whole','fillet','portions','heads','bottle'].filter(function(c){return cuts[c];}).map(function(c){return '<option value="'+c+'">'+CUT(c)+'</option>';}).join('');
+  scanPrice();
 }
-function addFormLine(){ window._editForms.push({code:'',label:'',state:'fresh',price:0,active:true}); renderFormLines(); }
-function removeFormLine(i){ window._editForms.splice(i,1); if(!window._editForms.length)addFormLine(); renderFormLines(); }
-function closeModal(){ el('modal-bg').classList.remove('on'); }
-
-function slugify(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
-function codify(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,30); }
-
-function saveProduct(pid){
-  var name=el('m-name').value.trim();
-  if(!name){ toast('Name is required'); return; }
-  var minKg=parseFloat(el('m-min').value); var maxKg=parseFloat(el('m-max').value);
-  var payload={
-    store_id:STORE_ID,
-    slug: pid ? undefined : slugify(name),
-    name:{en:name},
-    subtitle:{en:el('m-latin').value.trim()},
-    secondary:{en:el('m-local').value.trim()},
-    short:{en:el('m-desc').value.trim()},
-    active: el('m-active').value==='1',
-    min_grams: isNaN(minKg)?null:Math.round(minKg*1000),
-    max_grams: isNaN(maxKg)?null:Math.round(maxKg*1000)
-  };
-  var forms=window._editForms.filter(function(f){return f.label.trim()});
-  forms.forEach(function(f){ if(!f.code) f.code=codify(f.label); });
-
-  var p;
-  if(pid){
-    p = sb.from('products').update({name:payload.name,subtitle:payload.subtitle,secondary:payload.secondary,short:payload.short,active:payload.active,min_grams:payload.min_grams,max_grams:payload.max_grams}).eq('id',pid).select().single();
-  } else {
-    p = sb.from('products').insert(payload).select().single();
-  }
-  p.then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    var productId=res.data.id;
-    // upsert forms: simplest robust path — delete existing then insert current set
-    return sb.from('product_forms').delete().eq('product_id',productId).then(function(){
-      var rows=forms.map(function(f,i){ return {store_id:STORE_ID,product_id:productId,code:f.code||('f'+i),label:f.label.trim(),state:f.state,price:f.price,position:i,active:true}; });
-      if(!rows.length) return {data:[]};
-      return sb.from('product_forms').insert(rows);
-    }).then(function(r2){
-      if(r2&&r2.error){ toast('Forms error: '+r2.error.message); return; }
-      toast('Saved'); closeModal(); loadProducts();
-    });
-  });
+function scanPrice(){
+  var v=state.variants.filter(function(x){return x.product_id===el('sc-prod').value&&x.state===el('sc-state').value&&x.cut===el('sc-cut').value;})[0];
+  if(v) el('sc-price').value=v.price_per_kg;
 }
-function deleteProduct(pid){
-  if(!confirm('Delete this fish and all its forms?')) return;
-  sb.from('products').delete().eq('id',pid).then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    toast('Deleted'); closeModal(); loadProducts();
-  });
+function scanRecentRows(){
+  var r=state.units.filter(function(u){return u.source!=='epos';}).slice(-8).reverse();
+  return r.map(function(u){ return '<div class="rep-row"><span>'+u.uid+' · '+pname(u.product_id)+'</span><span class="rep-v">'+u.state+' '+CUT(u.cut)+' · '+Number(u.weight_kg).toFixed(2)+'kg</span></div>'; }).join('')||'<div class="muted" style="font-size:13px">Nothing scanned yet.</div>';
 }
-
-/* ---------- POINTS ---------- */
-function renderPoints(){
-  var host=el('p-points');
-  var rows=state.points.map(function(p){
-    return '<div class="point-row">'+
-      '<span class="num" style="background:'+(p.colour||'#0a1140')+'">'+p.number+'</span>'+
-      '<div class="pi"><h3>'+p.name+(p.is_outlet?' <span style="font-size:10px;color:var(--gilt)">· outlet</span>':'')+(p.active?'':' <span class="badge off">off</span>')+'</h3><p>'+(p.description||'')+'</p></div>'+
-      '<button class="btn ghost sm" onclick="editPoint('+p.number+')">Edit</button>'+
-    '</div>';
-  }).join('');
-  host.innerHTML='<div class="section-head"><h2>Collection points</h2><button class="btn gilt sm" onclick="editPoint(null)">+ Add point</button></div>'+
-    '<div class="card">'+(rows||'<div class="empty"><h3>No points</h3></div>')+'</div>';
-}
-function editPoint(num){
-  var p = num ? state.points.find(function(x){return x.number===num}) : null;
-  var nextNum = state.points.length ? Math.max.apply(null,state.points.map(function(x){return x.number}))+1 : 1;
-  el('modal').innerHTML='<h2>'+(p?'Edit point':'Add point')+'</h2>'+
-    '<div class="grid2">'+
-      '<div class="field"><label>Number</label><input type="number" id="pt-num" value="'+(p?p.number:nextNum)+'"></div>'+
-      '<div class="field"><label>Colour</label><input type="color" id="pt-col" value="'+(p&&p.colour||'#0a1140')+'" style="height:44px;padding:4px"></div>'+
-    '</div>'+
-    '<div class="field"><label>Name</label><input id="pt-name" value="'+(p&&p.name||'')+'" placeholder="Beau Vallon"></div>'+
-    '<div class="field"><label>Description</label><input id="pt-desc" value="'+(p&&p.description||'')+'" placeholder="Shop · open till 18:00"></div>'+
-    '<div class="grid2">'+
-      '<div class="field"><label>Latitude</label><input type="number" step="0.000001" id="pt-lat" value="'+(p&&p.lat!=null?p.lat:-4.64)+'"></div>'+
-      '<div class="field"><label>Longitude</label><input type="number" step="0.000001" id="pt-lng" value="'+(p&&p.lng!=null?p.lng:55.45)+'"></div>'+
-    '</div>'+
-    '<p class="muted" style="font-size:12px;margin:-6px 0 10px">Tip: on Google Maps, right-click the exact spot → click the coordinates to copy, then paste latitude and longitude here.</p>'+
-    '<div class="grid2">'+
-      '<div class="field"><label>Travel-box outlet?</label><select id="pt-outlet"><option value="0"'+((!p||!p.is_outlet)?' selected':'')+'>No</option><option value="1"'+((p&&p.is_outlet)?' selected':'')+'>Yes</option></select></div>'+
-      '<div class="field"><label>Active</label><select id="pt-active"><option value="1"'+((!p||p.active)?' selected':'')+'>Yes</option><option value="0"'+((p&&!p.active)?' selected':'')+'>No</option></select></div>'+
-    '</div>'+
-    '<div class="modal-foot">'+
-      (p?'<button class="btn danger sm" onclick="deletePoint('+p.number+')">Delete</button>':'')+
-      '<button class="btn ghost" onclick="closeModal()">Cancel</button>'+
-      '<button class="btn gilt" onclick="savePoint('+(p?p.number:'null')+')">Save</button>'+
-    '</div>';
-  el('modal-bg').classList.add('on');
-}
-function savePoint(origNum){
-  var row={
-    store_id:STORE_ID,
-    number:parseInt(el('pt-num').value,10),
-    name:el('pt-name').value.trim(),
-    description:el('pt-desc').value.trim(),
-    colour:el('pt-col').value,
-    is_outlet: el('pt-outlet').value==='1',
-    lat:parseFloat(el('pt-lat').value),
-    lng:parseFloat(el('pt-lng').value),
-    active: el('pt-active').value==='1'
-  };
-  if(!row.name){ toast('Name required'); return; }
-  var q;
-  if(origNum){ q=sb.from('collection_points').update(row).eq('store_id',STORE_ID).eq('number',origNum); }
-  else { q=sb.from('collection_points').insert(row); }
-  q.then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    toast('Saved'); closeModal(); loadPoints();
-  });
-}
-function deletePoint(num){
-  if(!confirm('Delete point '+num+'?')) return;
-  sb.from('collection_points').delete().eq('store_id',STORE_ID).eq('number',num).then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    toast('Deleted'); closeModal(); loadPoints();
-  });
-}
-
-
-/* ---------- STOCK (per point) ---------- */
-function loadStock(){
-  return sb.from('point_stock').select('*').eq('store_id',STORE_ID)
-    .then(function(r){ state.stock=r.data||[]; renderStock(); });
-}
-function allForms(){
-  // flatten product -> forms with display name
-  var out=[];
-  state.products.forEach(function(p){
-    formsFor(p.id).forEach(function(f){
-      out.push({ id:f.id, product:(p.name&&p.name.en||p.slug), label:f.label, state:f.state, price:f.price });
-    });
-  });
-  return out;
-}
-function stockFor(formId, pointNum){
-  return state.stock.find(function(s){ return s.form_id===formId && s.point_number===pointNum; });
-}
-function renderStock(){
-  var host=el('p-stock');
-  if(!state.points.length || !state.products.length){
-    host.innerHTML='<div class="section-head"><h2>Stock</h2></div><div class="card"><div class="empty"><h3>Add products and points first</h3><p>Stock is set per form, per collection point.</p></div></div>';
-    return;
-  }
-  // group by point: show each point, list forms with stock there + add button
-  var blocks = state.points.map(function(pt){
-    var rows = state.stock.filter(function(s){ return s.point_number===pt.number; }).map(function(s){
-      var f = allForms().find(function(x){return x.id===s.form_id;});
-      var nm = f ? (f.product+' · '+f.label) : '(unknown form)';
-      var badge = f ? '<span class="badge '+f.state+'">'+f.state+'</span>' : '';
-      return '<div class="stock-row">'+
-        '<div class="si"><div class="sn">'+nm+'</div><div>'+badge+'</div></div>'+
-        '<input class="skg" type="number" step="0.5" value="'+s.available_kg+'" onchange="saveStock(\''+s.form_id+'\','+pt.number+',this.value)"> <span class="kgunit">kg</span>'+
-        '<button class="del" onclick="delStock(\''+s.form_id+'\','+pt.number+')">×</button>'+
-      '</div>';
-    }).join('');
-    return '<div class="card">'+
-      '<div class="stock-head"><span class="num" style="background:'+(pt.colour||'#0a1140')+'">'+pt.number+'</span>'+
-        '<h3>'+pt.name+'</h3>'+
-        '<button class="btn ghost sm" onclick="addStock('+pt.number+')">+ Add stock</button></div>'+
-      (rows || '<div class="muted" style="font-size:13px;padding:8px 0">Nothing stocked here yet.</div>')+
-    '</div>';
-  }).join('');
-  host.innerHTML='<div class="section-head"><h2>Stock per point</h2><button class="btn ghost sm" onclick="loadStock()">Refresh</button></div>'+
-    '<p class="muted" style="font-size:13px;margin:-8px 0 16px">Set how many kg of each form are available at each point. Empty = not available there. Customers only see what is in stock at their chosen point.</p>'+
-    blocks;
-}
-function addStock(pointNum){
-  var forms=allForms();
-  if(!forms.length){ toast('Add product forms first'); return; }
-  // exclude forms already stocked at this point
-  var taken = state.stock.filter(function(s){return s.point_number===pointNum;}).map(function(s){return s.form_id;});
-  var avail = forms.filter(function(f){ return taken.indexOf(f.id)===-1; });
-  if(!avail.length){ toast('All forms already added at this point'); return; }
-  var pt=state.points.find(function(p){return p.number===pointNum;});
-  el('modal').innerHTML='<h2>Add stock — '+(pt?pt.name:('point '+pointNum))+'</h2>'+
-    '<div class="field"><label>Form</label><select id="st-form">'+
-      avail.map(function(f){ return '<option value="'+f.id+'">'+f.product+' · '+f.label+' ('+f.state+')</option>'; }).join('')+
-    '</select></div>'+
-    '<div class="field"><label>Available (kg)</label><input id="st-kg" type="number" step="0.5" value="5"></div>'+
-    '<div class="modal-foot">'+
-      '<button class="btn ghost" onclick="closeModal()">Cancel</button>'+
-      '<button class="btn gilt" onclick="createStock('+pointNum+')">Add</button>'+
-    '</div>';
-  el('modal-bg').classList.add('on');
-}
-function createStock(pointNum){
-  var formId=el('st-form').value;
-  var kg=parseFloat(el('st-kg').value)||0;
-  sb.from('point_stock').insert({ store_id:STORE_ID, form_id:formId, point_number:pointNum, available_kg:kg, active:true })
+function doScan(){
+  var pid=el('sc-prod').value, st=el('sc-state').value, cut=el('sc-cut').value;
+  var w=parseFloat(el('sc-weight').value)||0, packs=parseInt(el('sc-packs').value,10)||0, price=parseFloat(el('sc-price').value)||0;
+  var batch=el('sc-batch').value.trim()||null;
+  var uid=el('sc-uid').value.trim()||('U-'+Date.now().toString(36).toUpperCase());
+  if(!w||!packs||!price){ toast('Enter weight, packs and price'); return; }
+  sb.rpc('ob_scan_in',{ p_store:STORE_ID, p_uid:uid, p_product:pid, p_state:st, p_cut:cut, p_weight:w, p_packs:packs, p_price_per_kg:price, p_batch:batch })
     .then(function(res){
       if(res.error){ toast('Error: '+res.error.message); return; }
-      toast('Stock added'); closeModal(); loadStock();
+      if(res.data===false){ toast('Pack ID already exists'); return; }
+      toast('Scanned in: '+uid);
+      el('sc-weight').value=''; el('sc-packs').value=''; el('sc-uid').value='';
+      loadUnits().then(function(){ renderScan(); renderInventory(); renderDashboard(); });
     });
 }
-function saveStock(formId, pointNum, val){
-  var kg=parseFloat(val)||0;
-  sb.from('point_stock').update({ available_kg:kg, updated_at:new Date().toISOString() })
-    .eq('store_id',STORE_ID).eq('form_id',formId).eq('point_number',pointNum)
-    .then(function(res){ if(res.error){ toast('Error: '+res.error.message); } else { toast('Updated'); } });
-}
-function delStock(formId, pointNum){
-  if(!confirm('Remove this stock entry?')) return;
-  sb.from('point_stock').delete().eq('store_id',STORE_ID).eq('form_id',formId).eq('point_number',pointNum)
-    .then(function(res){ if(res.error){ toast('Error: '+res.error.message); return; } toast('Removed'); loadStock(); });
+
+/* ================= 3. ONLINE RESERVE INVENTORY ================= */
+function renderInventory(){
+  var f=state.invFilter;
+  var counts={all:state.units.length,available:0,held:0,sold:0,packed:0};
+  state.units.forEach(function(u){ if(counts[u.status]!=null) counts[u.status]++; });
+  var filters=['all','available','held','sold','packed'].map(function(k){ return '<button class="statpill" style="'+(f===k?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="state.invFilter=\''+k+'\';renderInventory()">'+k+' ('+(counts[k]||0)+')</button>'; }).join(' ');
+  var list=state.units.filter(function(u){return f==='all'||u.status===f;}).slice(0,300);
+  var rows=list.map(function(u){
+    var sc={available:'fresh',held:'frozen',sold:'off',packed:'off'}[u.status]||'off';
+    return '<div class="stock-row"><div class="si"><div class="sn">'+u.uid+' · '+pname(u.product_id)+'</div>'+
+      '<div class="kgunit">'+u.state+' · '+CUT(u.cut)+' · '+Number(u.weight_kg).toFixed(2)+' kg · '+u.packs+' pack'+(u.packs>1?'s':'')+(u.sku?(' · '+u.sku):'')+(u.batch?(' · '+u.batch):'')+'</div></div>'+
+      '<span class="badge '+sc+'">'+u.status+'</span><span class="kgunit">'+money(u.total)+'</span></div>';
+  }).join('');
+  el('p-inventory').innerHTML='<div class="section-head"><h2>Online Reserve Inventory</h2><button class="btn ghost sm" onclick="loadUnits().then(renderInventory)">Refresh</button></div>'+
+    '<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+filters+'</div>'+(rows||'<div class="empty"><h3>No stock units</h3><p>Scan fish in to populate the online reserve.</p></div>')+'</div>';
 }
 
-/* ---------- ORDERS ---------- */
-var STATUSES=['paid','picking','picked','packed','in_delivery','at_collection','collected','cancelled','refunded'];
+/* ================= 4. ORDER MONITOR ================= */
+var STATUSES=['pending_payment','paid','certificate_pending','preparing','packed','out_for_delivery','ready','collected','completed','cancelled'];
 function renderOrders(){
-  var host=el('p-orders');
   var rows=state.orders.map(function(o){
-    var ptName='';
-    if(o.point_number){ var pt=state.points.find(function(x){return x.number===o.point_number}); ptName=pt?pt.name:('#'+o.point_number); }
-    var opts=STATUSES.map(function(s){ return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
-    return '<div class="order-row">'+
-      '<div class="oinfo"><div class="ono">'+o.order_no+'</div>'+
-      '<div class="ometa">'+(o.customer&&o.customer.name||'—')+' · '+money(o.total)+' · '+(o.fulfil_type||'')+(ptName?(' · '+ptName):'')+'</div></div>'+
-      '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select>'+
-    '</div>';
+    var where;
+    if(o.type==='travel'){ var sh=state.shops.filter(function(x){return x.id===o.shop_id;})[0]; where='Travel · '+(o.boxes_label||'')+(sh?(' · '+sh.name):''); }
+    else if(o.fulfilment==='door'){ where='Delivery'+(o.door_code?(' · '+o.door_code):''); }
+    else { where='Collect'+(o.drop_point_id?(' · '+o.drop_point_id):''); }
+    var opts=STATUSES.map(function(st){ return '<option value="'+st+'"'+(o.status===st?' selected':'')+'>'+st+'</option>'; }).join('');
+    return '<div class="order-row"><div class="oinfo"><div class="ono">'+o.id+'</div>'+
+      '<div class="ometa">'+(o.customer_name||'—')+' · '+money(o.total)+' · '+where+'</div></div>'+
+      '<button class="btn ghost sm" onclick="markPacked(\''+o.id+'\')">Packed</button>'+
+      '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select></div>';
   }).join('');
-  host.innerHTML='<div class="section-head"><h2>Orders</h2><button class="btn ghost sm" onclick="loadOrders({notify:true})">Refresh</button></div>'+
+  el('p-orders').innerHTML='<div class="section-head"><h2>Order Monitor</h2><button class="btn ghost sm" onclick="loadOrders({notify:true,render:true})">Refresh</button></div>'+
     '<div class="card">'+(rows||'<div class="empty"><h3>No orders yet</h3></div>')+'</div>';
 }
-function setStatus(id,status){
-  sb.from('orders').update({status:status}).eq('id',id).then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    toast('Status → '+status);
+function setStatus(id,status){ sb.from('ob_orders').update({status:status}).eq('id',id).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Status → '+status); loadOrders(); }); }
+function markPacked(id){ sb.rpc('ob_mark_packed',{p_order:id}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Marked packed: '+id); loadOrders({render:true}); loadUnits(); }); }
+
+/* ================= 5. PICK LISTS & STICKERS (next build) ================= */
+function dropById(id){ return state.drops.filter(function(d){return d.id===id;})[0]; }
+function routeTag(o){
+  if(o.type==='travel'){ var sh=state.shops.filter(function(x){return x.id===o.shop_id;})[0]; return 'Travel Box'+(sh?(' \u00b7 '+sh.name):''); }
+  if(o.fulfilment==='door'){ return 'Door-to-door \u00b7 '+(o.door_code||'SILVER'); }
+  var d=dropById(o.drop_point_id); return 'Collect \u00b7 '+(o.drop_point_id||'?')+(d?(' '+d.color):'');
+}
+function routeHex(o){ if(o.type==='travel'||o.fulfilment==='door') return '#0a1140'; var d=dropById(o.drop_point_id); return d?(d.hex||'#0a1140'):'#0a1140'; }
+function unitsForOrder(oid){ return state.units.filter(function(u){return u.order_id===oid;}); }
+function pickOrders(){ return state.orders.filter(function(o){return ['paid','preparing','certificate_pending','packed','ready'].indexOf(o.status)>-1;}); }
+
+function pickMaster(){
+  var os=pickOrders().filter(function(o){return o.status!=='ready';});
+  if(!os.length) return '<h3 style="font-size:16px;margin-bottom:8px">Master pick list</h3><p class="muted" style="font-size:13px">No orders to pick.</p>';
+  var blocks=os.map(function(o){
+    var us=unitsForOrder(o.id);
+    var lines=us.length?us.map(function(u){return '<tr><td>'+u.uid+'</td><td>'+pname(u.product_id)+'</td><td>'+u.state+' '+CUT(u.cut)+'</td><td>'+Number(u.weight_kg).toFixed(2)+' kg</td><td>'+(u.sku||'')+'</td></tr>';}).join(''):'<tr><td colspan="5" class="muted">Items resolved at pack time.</td></tr>';
+    return '<div class="pl-block"><div class="pl-h"><span class="pl-dot" style="background:'+routeHex(o)+'"></span><b>'+o.id+'</b> \u00b7 '+(o.customer_name||'\u2014')+' \u00b7 '+routeTag(o)+'</div>'+
+      '<table class="pl-t"><thead><tr><th>Pack ID</th><th>Product</th><th>State / Cut</th><th>Weight</th><th>SKU</th></tr></thead><tbody>'+lines+'</tbody></table></div>';
+  }).join('');
+  return '<h3 style="font-size:16px;margin-bottom:8px">Master pick list</h3>'+blocks;
+}
+function pickStickers(){
+  var os=pickOrders();
+  if(!os.length) return '<h3 style="font-size:16px;margin-bottom:8px">Customer stickers</h3><p class="muted" style="font-size:13px">No orders.</p>';
+  return '<h3 style="font-size:16px;margin-bottom:8px">Customer stickers</h3><div class="stk-grid">'+os.map(function(o){
+    var us=unitsForOrder(o.id);
+    return '<div class="stk"><div class="stk-bar" style="background:'+routeHex(o)+'"></div><div class="stk-no">'+o.id+'</div><div class="stk-cust">'+(o.customer_name||'\u2014')+'</div><div class="stk-rt">'+routeTag(o)+'</div><div class="stk-meta">'+us.length+' pack'+(us.length===1?'':'s')+' \u00b7 '+money(o.total)+'</div></div>';
+  }).join('')+'</div>';
+}
+function pickManifest(){
+  var groups={};
+  pickOrders().forEach(function(o){
+    var key=o.type==='travel'?'Travel Box':(o.fulfilment==='door'?('Door-to-door \u00b7 '+(o.door_code||'SILVER')):('Collect \u00b7 '+(o.drop_point_id||'?')+((dropById(o.drop_point_id)||{}).color?(' '+dropById(o.drop_point_id).color):'')));
+    (groups[key]=groups[key]||[]).push(o);
   });
+  var keys=Object.keys(groups);
+  if(!keys.length) return '<h3 style="font-size:16px;margin-bottom:8px">Route manifest</h3><p class="muted" style="font-size:13px">No orders to dispatch.</p>';
+  return '<h3 style="font-size:16px;margin-bottom:8px">Route manifest</h3>'+keys.map(function(k){
+    var rows=groups[k].map(function(o){return '<tr><td>'+o.id+'</td><td>'+(o.customer_name||'\u2014')+'</td><td>'+(o.phone||'')+'</td><td>'+money(o.total)+'</td></tr>';}).join('');
+    return '<div class="pl-block"><div class="pl-h"><b>'+k+'</b> \u00b7 '+groups[k].length+' order'+(groups[k].length===1?'':'s')+'</div><table class="pl-t"><thead><tr><th>Order</th><th>Customer</th><th>Phone</th><th>Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }).join('');
+}
+function pickReplenish(){
+  var low=lowStock();
+  if(!low.length) return '<h3 style="font-size:16px;margin-bottom:8px">Replenishment report</h3><p class="muted" style="font-size:13px">All lines at or above minimum.</p>';
+  var rows=low.map(function(m){ var have=state.units.filter(function(u){return u.product_id===m.product_id&&u.state===m.state&&u.cut===m.cut&&u.status==='available';}).length; return '<tr><td>'+pname(m.product_id)+'</td><td>'+m.state+' '+CUT(m.cut)+'</td><td>'+have+'</td><td>'+(m.min_count||0)+'</td><td><b>'+Math.max(0,(m.min_count||0)-have)+'</b></td></tr>'; }).join('');
+  return '<h3 style="font-size:16px;margin-bottom:8px">Replenishment report</h3><table class="pl-t"><thead><tr><th>Product</th><th>State / Cut</th><th>Have</th><th>Min</th><th>To order</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function printDoc(kind){
+  var html = kind==='master'?pickMaster():kind==='stickers'?pickStickers():kind==='manifest'?pickManifest():pickReplenish();
+  var title=({master:'Master pick list',stickers:'Customer stickers',manifest:'Route manifest',replenish:'Replenishment report'})[kind];
+  var prev=el('pick-preview'); if(prev) prev.innerHTML=html;
+  var pa=el('print-area'); pa.innerHTML='<div class="pa-head"><h1>Ocean Basket \u2014 '+title+'</h1><div>'+new Date().toLocaleString()+'</div></div>'+html;
+  window.print();
+}
+function renderPicklists(){
+  var n=pickOrders().length;
+  el('p-picklists').innerHTML='<div class="section-head"><h2>Pick Lists &amp; Stickers</h2><button class="btn ghost sm" onclick="loadOrders({render:false}).then(function(){loadUnits().then(renderPicklists)})">Refresh</button></div>'+
+    '<div class="card"><p class="muted" style="font-size:13px;margin-bottom:12px">Print back-of-house documents. <b>'+n+'</b> order'+(n===1?'':'s')+' in the pick &amp; pack queue.</p>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="btn gilt sm" onclick="printDoc(\'master\')">\ud83d\udda8 Master pick list</button>'+
+        '<button class="btn sm" onclick="printDoc(\'stickers\')">\ud83d\udda8 Customer stickers</button>'+
+        '<button class="btn sm" onclick="printDoc(\'manifest\')">\ud83d\udda8 Route manifest</button>'+
+        '<button class="btn ghost sm" onclick="printDoc(\'replenish\')">\ud83d\udda8 Replenishment report</button>'+
+      '</div></div>'+
+    '<div class="card" id="pick-preview">'+pickMaster()+'</div>';
 }
 
-/* ---------- SETTINGS ---------- */
-function renderSettings(){
-  var s=state.settings;
-  el('p-settings').innerHTML='<div class="section-head"><h2>Settings</h2></div>'+
-    '<div class="card">'+
-      '<div class="grid2">'+
-        '<div class="field"><label>Grams per person</label><input type="number" id="s-gpp" value="'+(s.grams_per_person||250)+'"></div>'+
-        '<div class="field"><label>Delivery fee (SCR)</label><input type="number" id="s-fee" value="'+(s.delivery_fee||100)+'"></div>'+
-      '</div>'+
-      '<div class="grid2">'+
-        '<div class="field"><label>Free delivery from (SCR)</label><input type="number" id="s-free" value="'+(s.free_from||3000)+'"></div>'+
-        '<div class="field"><label>Tolerance ± per portion (g)</label><input type="text" id="s-tol" value="'+(s.tolerance_low||225)+'–'+(s.tolerance_high||275)+'" disabled></div>'+
-      '</div>'+
-      '<button class="btn gilt" style="margin-top:8px" onclick="saveSettings()">Save settings</button>'+
-    '</div>'+
-    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">App link</h3>'+
-      '<p class="muted" style="font-size:13px;margin-bottom:8px">Customer app:</p>'+
-      '<a href="https://mmysiakbiz-hash.github.io/storefront/ocean-basket-app.html" target="_blank" style="font-size:13px;word-break:break-all">mmysiakbiz-hash.github.io/storefront/ocean-basket-app.html</a>'+
-    '</div>';
-}
-function saveSettings(){
-  var merged=Object.assign({},state.settings,{
-    grams_per_person:parseInt(el('s-gpp').value,10)||250,
-    delivery_fee:parseFloat(el('s-fee').value)||0,
-    free_from:parseFloat(el('s-free').value)||0
-  });
-  sb.from('stores').update({settings:merged}).eq('id',STORE_ID).then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    state.settings=merged; toast('Settings saved');
-  });
+/* ================= 6. ROUTES & DROP POINTS ================= */
+function renderRoutes(){
+  var rows=state.drops.map(function(d){ return '<div class="point-row"><span class="num" style="background:'+(d.hex||'#0a1140')+'">'+d.id+'</span>'+
+    '<div class="pi"><h3>'+d.name+'</h3><p>'+(d.zone||'')+' · '+(d.color||'')+' label · '+(d.phone||'')+(d.address?(' · '+d.address):'')+'</p></div></div>'; }).join('');
+  el('p-routes').innerHTML='<div class="section-head"><h2>Routes & Drop Points</h2></div>'+
+    '<div class="card"><div class="rep-row"><span>Door-to-door · free threshold</span><span class="rep-v">GOLD</span></div><div class="rep-row"><span>Door-to-door · paid</span><span class="rep-v">SILVER</span></div></div>'+
+    '<div class="card">'+(rows||'<div class="empty"><h3>No drop points</h3></div>')+'</div>';
 }
 
-
-/* ---------- REPORTS ---------- */
-function renderReports(){
-  var host=el('p-reports'); if(!host) return;
-  var orders=state.orders||[];
-  var paidish=orders.filter(function(o){ return o.status!=='cancelled' && o.status!=='refunded'; });
-
-  // totals
-  var totalRevenue=paidish.reduce(function(s,o){ return s+Number(o.total||0); },0);
-  var totalOrders=orders.length;
-  var cancelled=orders.filter(function(o){ return o.status==='cancelled'||o.status==='refunded'; }).length;
-
-  // fulfilment split
-  var byFulfil={};
-  paidish.forEach(function(o){ var k=o.fulfil_type||'unknown'; byFulfil[k]=(byFulfil[k]||0)+1; });
-
-  // demand per collection point
-  var byPoint={};
-  paidish.forEach(function(o){ if(o.point_number){ byPoint[o.point_number]=(byPoint[o.point_number]||0)+1; } });
-
-  // status breakdown
-  var byStatus={};
-  orders.forEach(function(o){ byStatus[o.status]=(byStatus[o.status]||0)+1; });
-
-  function rows(obj, labelFn){
-    var keys=Object.keys(obj);
-    if(!keys.length) return '<div class="muted" style="font-size:13px">No data yet.</div>';
-    return keys.sort(function(a,b){return obj[b]-obj[a];}).map(function(k){
-      return '<div class="rep-row"><span>'+(labelFn?labelFn(k):k)+'</span><span class="rep-v">'+obj[k]+'</span></div>';
-    }).join('');
-  }
-  function ptLabel(n){ var p=state.points.find(function(x){return x.number==n;}); return p?p.name:('Point '+n); }
-
-  host.innerHTML='<div class="section-head"><h2>Reports</h2><button class="btn ghost sm" onclick="loadOrders({notify:true}).then(renderReports)">Refresh</button></div>'+
-    '<div class="card"><div class="rep-kpis">'+
-      '<div class="kpi"><div class="kpi-n">'+money(totalRevenue)+'</div><div class="kpi-l">Revenue (non-cancelled)</div></div>'+
-      '<div class="kpi"><div class="kpi-n">'+totalOrders+'</div><div class="kpi-l">Total orders</div></div>'+
-      '<div class="kpi"><div class="kpi-n">'+cancelled+'</div><div class="kpi-l">Cancelled / refunded</div></div>'+
-    '</div></div>'+
-    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Orders by fulfilment</h3>'+rows(byFulfil, function(k){return k==='pickup'?'Collection':(k==='delivery'?'Door-to-door':(k==='travelbox'?'Travel Box':k));})+'</div>'+
-    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Demand by collection point</h3>'+rows(byPoint, ptLabel)+'</div>'+
-    '<div class="card"><h3 style="font-size:16px;margin-bottom:10px">Orders by status</h3>'+rows(byStatus)+'</div>'+
-    '<p class="muted" style="font-size:12px">Note: species & fresh/frozen split will populate as orders accumulate line-item detail.</p>';
+/* ================= 7. REPLENISHMENT ================= */
+function renderReplenish(){
+  var rows=state.minimums.map(function(m){
+    var have=state.units.filter(function(u){return u.product_id===m.product_id&&u.state===m.state&&u.cut===m.cut&&u.status==='available';}).length;
+    var min=m.min_count||0, low=have<min;
+    return '<div class="stock-row"><div class="si"><div class="sn">'+pname(m.product_id)+' · '+m.state+' '+CUT(m.cut)+'</div><div class="kgunit">have '+have+' / min '+min+'</div></div><span class="badge '+(low?'off':'fresh')+'">'+(low?'RESTOCK':'ok')+'</span></div>';
+  }).join('');
+  el('p-replenish').innerHTML='<div class="section-head"><h2>Replenishment</h2></div><div class="card">'+(rows||'<div class="empty"><h3>No minimums set</h3></div>')+'</div>';
 }
 
-/* ---------- TOAST ---------- */
-var tt;
-function toast(t){ var n=el('toast'); n.textContent=t; n.classList.add('show'); clearTimeout(tt); tt=setTimeout(function(){n.classList.remove('show')},2600); }
+/* ================= 8. 4-SHOP LIVE STOCK ================= */
+function renderShops(){
+  var cards=state.shops.map(function(sh){
+    var rows=state.shopStock.filter(function(s){return s.shop_id===sh.id;}).map(function(s){ return '<div class="rep-row"><span>'+pname(s.product_id)+'</span><span class="rep-v">'+Number(s.fresh_kg||0).toFixed(1)+' kg fresh · '+Number(s.frozen_kg||0).toFixed(1)+' kg frozen</span></div>'; }).join('')||'<div class="muted" style="font-size:13px">No stock recorded.</div>';
+    return '<div class="card"><h3 style="font-size:18px;margin-bottom:8px">'+sh.name+'</h3>'+rows+'</div>';
+  }).join('');
+  el('p-shops').innerHTML='<div class="section-head"><h2>4-Shop Live Stock</h2></div>'+(cards||'<div class="empty"><h3>No shops</h3></div>');
+}
 
+/* ================= 9. VISUAL STORYBOARD ================= */
+function renderStoryboard(){
+  var steps=[['1','Scan-In','Night shift scans unique pack IDs into Online Reserve.'],['2','Customer orders','Item held & removed from public availability; paid = sold.'],['3','Pick & label','Print pick list, scan exact pack IDs, apply customer + route colour stickers.'],['4','Sort & dispatch','Sort by drop point (colour code) or door-to-door SILVER/GOLD.'],['5','Collect / deliver','Customer collects at point or receives door-to-door; Travel Box inspected at shop.']];
+  el('p-storyboard').innerHTML='<div class="section-head"><h2>Visual Storyboard</h2></div>'+
+    steps.map(function(s){ return '<div class="card" style="display:flex;gap:14px;align-items:flex-start"><span class="num" style="width:34px;height:34px;border-radius:50%;background:var(--gilt);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+s[0]+'</span><div><h3 style="font-size:17px;font-family:Outfit;font-weight:600">'+s[1]+'</h3><p class="muted" style="font-size:13px">'+s[2]+'</p></div></div>'; }).join('');
+}
+
+/* ================= UI ================= */
+function closeModal(){ el('modal-bg').classList.remove('on'); }
+function toast(t){ var x=el('toast'); x.textContent=t; x.classList.add('show'); setTimeout(function(){ x.classList.remove('show'); },2200); }
+
+/* check session on load (restores session + after magic-link redirect) */
 boot();
+
 </script>
+<div id="print-area"></div>
 </body>
 </html>
