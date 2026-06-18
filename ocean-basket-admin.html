@@ -154,6 +154,8 @@ a{color:var(--ink)}
   .stk,.pl-block{break-inside:avoid}
   .stk{border:1px solid #000}
 }
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gilt);border-radius:50%;animation:spin .6s linear infinite;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -195,7 +197,6 @@ a{color:var(--ink)}
     <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
     <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
     <button data-tab="shops" onclick="tab('shops')">4-Shop Stock</button>
-    <button data-tab="storyboard" onclick="tab('storyboard')">Storyboard</button>
   </div>
   <div class="wrap">
     <div class="panel on" id="p-dashboard"><div class="loading">Loading…</div></div>
@@ -206,7 +207,6 @@ a{color:var(--ink)}
     <div class="panel" id="p-routes"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-storyboard"><div class="loading">Loading…</div></div>
   </div>
 </div>
 
@@ -278,8 +278,8 @@ function onLogin(user){
 
 /* ---------- LOAD DATA ---------- */
 function loadAll(){
-  Promise.all([loadCatalog(), loadUnits(), loadOrders(), loadMinimums()]).then(function(){
-    renderDashboard(); renderScan(); renderInventory(); renderOrders(); renderPicklists(); renderRoutes(); renderReplenish(); renderShops(); renderStoryboard();
+  return Promise.all([loadCatalog(), loadUnits(), loadOrders(), loadMinimums()]).then(function(){
+    renderDashboard(); renderScan(); renderInventory(); renderOrders(); renderPicklists(); renderRoutes(); renderReplenish(); renderShops();
   });
 }
 function loadCatalog(){
@@ -324,7 +324,7 @@ function renderDashboard(){
   var toPack=state.orders.filter(function(o){return o.status==='paid'||o.status==='preparing';}).length;
   var low=lowStock().length;
   var recent=state.orders.slice(0,6).map(function(o){ return '<div class="rep-row"><span>'+o.id+' · '+(o.type||'')+'</span><span class="rep-v">'+money(o.total)+' · '+o.status+'</span></div>'; }).join('') || '<div class="muted" style="font-size:13px">No orders yet.</div>';
-  el('p-dashboard').innerHTML='<div class="section-head"><h2>Dashboard</h2><button class="btn ghost sm" onclick="loadAll()">Refresh</button></div>'+
+  el('p-dashboard').innerHTML='<div class="section-head"><h2>Dashboard</h2><button class="btn ghost sm" onclick="doRefresh(this,loadAll)">Refresh</button></div>'+
     '<div class="card"><div class="rep-kpis">'+kpi(avail,'Available units')+kpi(held,'Held now')+kpi(sold,'Sold / packed')+kpi(ordToday,'Orders today')+kpi(certPending,'Cert. pending')+kpi(low,'Low-stock lines')+'</div></div>'+
     '<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Today\u2019s priorities</h3>'+
       '<div class="rep-row"><span>Pack &amp; label paid orders</span><span class="rep-v">'+toPack+'</span></div>'+
@@ -338,7 +338,7 @@ function renderScan(){
   var prodOpts=state.products.map(function(p){ return '<option value="'+p.id+'">'+p.name+' ('+(p.code||'')+')</option>'; }).join('');
   el('p-scan').innerHTML='<div class="section-head"><h2>Scan-In</h2></div>'+
     '<div class="card"><p class="muted" style="font-size:13px;margin-bottom:14px">Add a physical pack/fish into the Online Reserve. Each unit gets a unique ID and becomes available to customers.</p>'+
-    '<div class="grid2">'+
+    '<div class="field"><label>Scan / type barcode</label><input id="sc-barcode" autocomplete="off" placeholder="e.g. 54RD-F-WHO-00123 — scan or type, then Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();resolveBarcode();}"><div class="muted" style="font-size:12px;margin-top:5px">A handheld scanner types the code then Enter. The barcode fills product / state / cut / price and becomes the pack ID. Or fill the fields manually below.</div></div>'+'<div style="border-top:1px solid var(--line);margin:4px 0 16px"></div>'+'<div class="grid2">'+
       '<div class="field"><label>Product</label><select id="sc-prod" onchange="scanCuts()">'+prodOpts+'</select></div>'+
       '<div class="field"><label>State</label><select id="sc-state" onchange="scanPrice()"><option value="fresh">fresh</option><option value="frozen">frozen</option></select></div>'+
       '<div class="field"><label>Cut</label><select id="sc-cut" onchange="scanPrice()"></select></div>'+
@@ -360,6 +360,26 @@ function scanCuts(){
 function scanPrice(){
   var v=state.variants.filter(function(x){return x.product_id===el('sc-prod').value&&x.state===el('sc-state').value&&x.cut===el('sc-cut').value;})[0];
   if(v) el('sc-price').value=v.price_per_kg;
+}
+function skuMap(){ var m={}; (state.variants||[]).forEach(function(v){ if(v.sku){ m[String(v.sku).toUpperCase()]={product:v.product_id,state:v.state,cut:v.cut,price:v.price_per_kg}; } }); return m; }
+function resolveBarcode(){
+  var code=(el('sc-barcode').value||'').trim(); if(!code){ return; }
+  var up=code.toUpperCase(); var m=skuMap();
+  var skus=Object.keys(m).sort(function(a,b){return b.length-a.length;});
+  var hit=null;
+  for(var i=0;i<skus.length;i++){ if(up===skus[i] || up.indexOf(skus[i])===0){ hit=m[skus[i]]; break; } }
+  if(hit){
+    el('sc-prod').value=hit.product; scanCuts();
+    el('sc-state').value=hit.state; el('sc-cut').value=hit.cut; scanPrice();
+    if(hit.price) el('sc-price').value=hit.price;
+    el('sc-uid').value=code;
+    toast('Barcode \u2192 '+pname(hit.product)+' \u00b7 '+hit.state+' '+CUT(hit.cut));
+    var w=el('sc-weight'); if(w){ w.focus(); }
+    return;
+  }
+  var p=(state.products||[]).filter(function(x){ return x.code && (up===String(x.code).toUpperCase() || up.indexOf(String(x.code).toUpperCase())===0); })[0];
+  if(p){ el('sc-prod').value=p.id; scanCuts(); el('sc-uid').value=code; toast('Barcode \u2192 '+p.name+' \u2014 set state & cut'); return; }
+  el('sc-uid').value=code; toast('Unknown barcode \u2014 select product manually');
 }
 function scanRecentRows(){
   var r=state.units.filter(function(u){return u.source!=='epos';}).slice(-8).reverse();
@@ -394,7 +414,7 @@ function renderInventory(){
       '<div class="kgunit">'+u.state+' · '+CUT(u.cut)+' · '+Number(u.weight_kg).toFixed(2)+' kg · '+u.packs+' pack'+(u.packs>1?'s':'')+(u.sku?(' · '+u.sku):'')+(u.batch?(' · '+u.batch):'')+'</div></div>'+
       '<span class="badge '+sc+'">'+u.status+'</span><span class="kgunit">'+money(u.total)+'</span></div>';
   }).join('');
-  el('p-inventory').innerHTML='<div class="section-head"><h2>Online Reserve Inventory</h2><button class="btn ghost sm" onclick="loadUnits().then(renderInventory)">Refresh</button></div>'+
+  el('p-inventory').innerHTML='<div class="section-head"><h2>Online Reserve Inventory</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadUnits().then(renderInventory);})">Refresh</button></div>'+
     '<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+filters+'</div>'+(rows||'<div class="empty"><h3>No stock units</h3><p>Scan fish in to populate the online reserve.</p></div>')+'</div>';
 }
 
@@ -412,7 +432,7 @@ function renderOrders(){
       '<button class="btn ghost sm" onclick="markPacked(\''+o.id+'\')">Packed</button>'+
       '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select></div>';
   }).join('');
-  el('p-orders').innerHTML='<div class="section-head"><h2>Order Monitor</h2><button class="btn ghost sm" onclick="loadOrders({notify:true,render:true})">Refresh</button></div>'+
+  el('p-orders').innerHTML='<div class="section-head"><h2>Order Monitor</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadOrders({render:true});})">Refresh</button></div>'+
     '<div class="card">'+(rows||'<div class="empty"><h3>No orders yet</h3></div>')+'</div>';
 }
 function setStatus(id,status){ sb.from('ob_orders').update({status:status}).eq('id',id).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Status → '+status); loadOrders(); }); }
@@ -476,7 +496,7 @@ function printDoc(kind){
 }
 function renderPicklists(){
   var n=pickOrders().length;
-  el('p-picklists').innerHTML='<div class="section-head"><h2>Pick Lists &amp; Stickers</h2><button class="btn ghost sm" onclick="loadOrders({render:false}).then(function(){loadUnits().then(renderPicklists)})">Refresh</button></div>'+
+  el('p-picklists').innerHTML='<div class="section-head"><h2>Pick Lists &amp; Stickers</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadOrders({render:false}).then(function(){return loadUnits().then(renderPicklists);});})">Refresh</button></div>'+
     '<div class="card"><p class="muted" style="font-size:13px;margin-bottom:12px">Print back-of-house documents. <b>'+n+'</b> order'+(n===1?'':'s')+' in the pick &amp; pack queue.</p>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
         '<button class="btn gilt sm" onclick="printDoc(\'master\')">\ud83d\udda8 Master pick list</button>'+
@@ -515,16 +535,19 @@ function renderShops(){
   el('p-shops').innerHTML='<div class="section-head"><h2>4-Shop Live Stock</h2></div>'+(cards||'<div class="empty"><h3>No shops</h3></div>');
 }
 
-/* ================= 9. VISUAL STORYBOARD ================= */
-function renderStoryboard(){
-  var steps=[['1','Scan-In','Night shift scans unique pack IDs into Online Reserve.'],['2','Customer orders','Item held & removed from public availability; paid = sold.'],['3','Pick & label','Print pick list, scan exact pack IDs, apply customer + route colour stickers.'],['4','Sort & dispatch','Sort by drop point (colour code) or door-to-door SILVER/GOLD.'],['5','Collect / deliver','Customer collects at point or receives door-to-door; Travel Box inspected at shop.']];
-  el('p-storyboard').innerHTML='<div class="section-head"><h2>Visual Storyboard</h2></div>'+
-    steps.map(function(s){ return '<div class="card" style="display:flex;gap:14px;align-items:flex-start"><span class="num" style="width:34px;height:34px;border-radius:50%;background:var(--gilt);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+s[0]+'</span><div><h3 style="font-size:17px;font-family:Outfit;font-weight:600">'+s[1]+'</h3><p class="muted" style="font-size:13px">'+s[2]+'</p></div></div>'; }).join('');
-}
-
 /* ================= UI ================= */
 function closeModal(){ el('modal-bg').classList.remove('on'); }
 function toast(t){ var x=el('toast'); x.textContent=t; x.classList.add('show'); setTimeout(function(){ x.classList.remove('show'); },2200); }
+function doRefresh(btn, fn){
+  if(btn.getAttribute('data-busy')==='1') return;
+  btn.setAttribute('data-busy','1'); var orig=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span> Refreshing\u2026';
+  var t0=Date.now();
+  Promise.resolve().then(fn).then(function(){
+    var wait=Math.max(0, 550-(Date.now()-t0));
+    setTimeout(function(){ toast('Updated \u2713'); if(btn.isConnected){ btn.innerHTML=orig; btn.setAttribute('data-busy','0'); } }, wait);
+  }).catch(function(){ if(btn.isConnected){ btn.innerHTML=orig; btn.setAttribute('data-busy','0'); } toast('Refresh failed \u2014 check connection.'); });
+}
 
 /* check session on load (restores session + after magic-link redirect) */
 boot();
