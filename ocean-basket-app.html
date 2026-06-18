@@ -94,6 +94,11 @@ img{display:block; max-width:100%}
 }
 .btn:active{transform:scale(.985)}
 .btn:disabled{opacity:.45}
+.btn.is-loading{opacity:1}
+button.is-loading{pointer-events:none}
+.btnspin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:btnspin .6s linear infinite;vertical-align:middle}
+.btnspin.d{border-color:rgba(10,17,64,.22);border-top-color:var(--ink)}
+@keyframes btnspin{to{transform:rotate(360deg)}}
 .btn.gilt{background:var(--gilt)}
 .btn.teal{background:var(--ink2)}
 .btn.ghost{background:#fff; color:var(--ink); border:1.5px solid var(--line)}
@@ -3591,12 +3596,34 @@ function setPCut(cut){ state.cfg.cut=cut; state.cfg.sel=null; renderProduct(); }
 function setPacks(n){ state.cfg.packs=n; state.cfg.sel=null; renderProduct(); }
 function setRec(k){ state.cfg.sel=k; renderProduct(); }
 
+/* ---------- BUTTON LOADING STATE ---------- */
+var _clickBtn=null;
+document.addEventListener('click', function(e){ var t=e.target; _clickBtn=(t&&t.closest)?t.closest('button'):null; }, true);
+function takeBtn(){ var b=_clickBtn; _clickBtn=null; return b; }
+var _spinStore=(typeof WeakMap!=='undefined')?new WeakMap():null;
+function btnSpin(btn){
+  if(!btn||!_spinStore||_spinStore.has(btn)) return;
+  _spinStore.set(btn, btn.innerHTML);
+  var r=btn.getBoundingClientRect();
+  if(r.width) btn.style.minWidth=Math.ceil(r.width)+'px';
+  if(r.height) btn.style.minHeight=Math.ceil(r.height)+'px';
+  var dark=!btn.classList.contains('gilt') && (btn.classList.contains('ghost')||btn.classList.contains('rm')||!btn.classList.contains('btn'));
+  btn.innerHTML='<span class="btnspin'+(dark?' d':'')+'"></span>';
+  btn.classList.add('is-loading'); btn.disabled=true;
+}
+function btnDone(btn){
+  if(!btn||!_spinStore||!_spinStore.has(btn)) return;
+  btn.innerHTML=_spinStore.get(btn); _spinStore.delete(btn);
+  btn.classList.remove('is-loading'); btn.disabled=false;
+  btn.style.minWidth=''; btn.style.minHeight='';
+}
 function addToCart(){
   if(state.tbMode){ return tbAddFromProduct(); }
+  var _b=takeBtn(); btnSpin(_b);
   var s=state.product, c=state.cfg;
   var recs=recsFor();
   var rec = recs.filter(function(r){ return r.key===c.sel; })[0] || recs[0];
-  if(!rec){ toast('No stock available for this choice.'); return; }
+  if(!rec){ btnDone(_b); toast('No stock available for this choice.'); return; }
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'hold',session:sid(),uids:rec.uids,mode:'local'})})
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,res:res}; }); })
     .then(function(o){
@@ -3616,7 +3643,7 @@ function addToCart(){
       toast(s.name+' added — held '+Math.round(secs/60)+' min');
       return loadUnits().then(function(){ go('cart'); });
     })
-    .catch(function(){ toast('Could not reserve — check connection.'); });
+    .catch(function(){ toast('Could not reserve — check connection.'); }).finally(function(){ btnDone(_b); });
 }
 
 /* ---------- CART (v2 — reservation + countdown) ---------- */
@@ -3689,7 +3716,9 @@ function removeItem(uid){
 }
 
 function extendCart(){
+  var _b=takeBtn();
   if(!state.cart.some(function(l){ return !l.extended; })){ toast('Extension already used.'); return; }
+  btnSpin(_b);
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'extend',session:sid(),mode:'local'})})
     .then(function(r){ return r.json().catch(function(){ return {}; }); })
     .then(function(res){
@@ -3697,7 +3726,7 @@ function extendCart(){
       state.cart.forEach(function(l){ if(!l.extended){ l.exp=(l.exp||Date.now())+add; l.extended=true; } });
       toast('Extended by '+Math.round(((res&&res.added)||180)/60)+' min');
       if(state.screen==='cart') renderCart();
-    }).catch(function(){ toast('Could not extend.'); });
+    }).catch(function(){ toast('Could not extend.'); }).finally(function(){ btnDone(_b); });
 }
 
 var _cartTick=null;
@@ -3858,13 +3887,13 @@ function placeOrder(){
     fulfil:state.fulfil, point:state.point, doorCode:(state.fulfil==='delivery'?(deliveryFee===0?'GOLD':'SILVER'):null),
     payMethod:state.payMethod, customer:Object.assign({},state.customer), status:'paid', date:new Date().toISOString() };
 
-  var btn=el('payBtn'); if(btn){ btn.disabled=true; btn.textContent='Placing order…'; }
+  var btn=el('payBtn'); btnSpin(btn);
   fetch(API_BASE+'/orders',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok, status:r.status, res:res}; }); })
     .then(function(o){
       var res=o.res||{};
       if(o.status===409 || res.error==='basket_empty_or_expired'){
-        if(btn){ btn.disabled=false; btn.textContent='Place order'; }
+        btnDone(btn);
         toast('Your hold expired — please add items again.');
         state.cart=[]; updateCartBadge(); loadUnits(); go('shop'); return;
       }
@@ -3880,10 +3909,10 @@ function placeOrder(){
         state.cart=[]; updateCartBadge(); loadUnits();
         go('success'); return;
       }
-      if(btn){ btn.disabled=false; btn.textContent='Place order'; }
+      btnDone(btn);
       toast(res.error ? ('Could not place order: '+res.error) : 'Could not place order, please try again');
     })
-    .catch(function(err){ console.error('Order error:',err); if(btn){ btn.disabled=false; btn.textContent='Place order'; } toast('Network problem — order not placed.'); });
+    .catch(function(err){ console.error('Order error:',err); btnDone(btn); toast('Network problem — order not placed.'); });
 }
 /* ---------- SUCCESS ---------- */
 function qrSvg(t){ try{ var q=window.qrcode(0,'M'); q.addData(String(t)); q.make(); return q.createSvgTag({cellSize:4,margin:2}); }catch(e){ return ''; } }
@@ -3924,12 +3953,13 @@ function orderLookupHTML(){
 function lookupOrder(){
   var inp=el('order-lookup'); if(!inp) return;
   var code=(inp.value||'').trim().toUpperCase(); if(!code){ return; }
+  var _b=takeBtn(); btnSpin(_b);
   inp.disabled=true;
   fetchStatus(code).then(function(r){
     inp.disabled=false;
     if(!r || r.__missing){ toast('Order not found \u2014 check the code.'); return; }
     saveOrderNo(code); inp.value=''; renderOrders();
-  }).catch(function(){ inp.disabled=false; toast('Could not check \u2014 connection problem.'); });
+  }).catch(function(){ inp.disabled=false; toast('Could not check \u2014 connection problem.'); }).finally(function(){ btnDone(_b); });
 }
 function renderOrders(){
   var host=el('orders-host');
@@ -4146,11 +4176,13 @@ function tbMinExp(){ if(!state.tb||!state.tb.items.length) return 0; return Math
 function tbRemainSec(){ var e=tbMinExp(); if(!e) return 0; return Math.max(0, Math.round((e-Date.now())/1000)); }
 function tbAnyExt(){ return !!(state.tb && state.tb.items.some(function(l){ return !l.extended; })); }
 function extendTravel(){
+  var _b=takeBtn();
   if(!tbAnyExt()){ toast('Extension already used.'); return; }
+  btnSpin(_b);
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'extend',session:sid(),mode:'travel'})})
     .then(function(r){ return r.json().catch(function(){return {};}); })
     .then(function(res){ var add=((res&&res.added)||180)*1000; state.tb.items.forEach(function(l){ if(!l.extended){ l.exp=(l.exp||Date.now())+add; l.extended=true; } }); toast('Extended by '+Math.round(((res&&res.added)||180)/60)+' min'); if(state.screen==='tb-shop') renderTbShop(); else if(state.screen==='tb-box') renderTbBox(); })
-    .catch(function(){ toast('Could not extend.'); });
+    .catch(function(){ toast('Could not extend.'); }).finally(function(){ btnDone(_b); });
 }
 function tbHoldBar(){ if(!state.tb||!state.tb.items.length) return ''; var rs=tbRemainSec(); return '<div class="hold-bar'+(rs<=0?' expired':'')+'" style="margin:12px 18px 0"><span class="ht cd">'+mmss(rs)+'</span><span class="hx">'+(rs>0?'Your Travel Box is held and hidden from public availability while it ticks.':'Hold expired \u2014 items released. Add fish again.')+'</span>'+((rs>0&&tbAnyExt())?'<button onclick="extendTravel()">Extend</button>':'')+'</div>'; }
 function tbBoxPreview(w){ var b,l; if(w<=5){b=1;l='1 Small Box';} else if(w<=10){b=1;l='1 Medium Box';} else if(w<=15){b=1;l='1 Large Box';} else {b=2;l='1 Large Box + 1 Medium Box';} return {boxes:b,label:l}; }
@@ -4197,6 +4229,10 @@ function tbValidateFlight(){
     var r=el('tb-rej'); if(r) r.scrollIntoView({behavior:'smooth'}); return;
   }
   if(!t.flightTime||!t.collectionTime){ toast('Please add flight time and collection time'); return; }
+  var _ct=t.collectionTime.split(':'), _ft=t.flightTime.split(':');
+  var _cMin=(+_ct[0])*60+(+_ct[1]), _fMin=(+_ft[0])*60+(+_ft[1]);
+  if(_cMin>=_fMin){ toast('Collection time must be before your flight time.'); return; }
+  if(_fMin-_cMin<60){ toast('Please leave at least 1 hour between collection and your flight.'); return; }
   state.tbMode=true; renderTbShop(); go('tb-shop');
 }
 
@@ -4231,11 +4267,12 @@ function renderTbMeter(){
 
 /* called from the product screen when adding in travel mode */
 function tbAddFromProduct(){
+  var _b=takeBtn(); btnSpin(_b);
   var s=state.product, c=state.cfg;
   var recs=recsFor();
   var rec = recs.filter(function(r){return r.key===c.sel;})[0] || recs[0];
-  if(!rec){ toast('No stock available for this choice.'); return; }
-  if(tbWeight()+rec.weight > tbCap()+1e-9){ toast('That would exceed the '+tbCap()+' kg Travel Box cap.'); return; }
+  if(!rec){ btnDone(_b); toast('No stock available for this choice.'); return; }
+  if(tbWeight()+rec.weight > tbCap()+1e-9){ btnDone(_b); toast('That would exceed the '+tbCap()+' kg Travel Box cap.'); return; }
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'hold',session:sid(),uids:rec.uids,mode:'travel'})})
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,res:res}; }); })
     .then(function(o){
@@ -4248,7 +4285,7 @@ function tbAddFromProduct(){
       toast(s.name+' added to Travel Box');
       return loadUnits().then(function(){ go('tb-shop'); });
     })
-    .catch(function(){ toast('Could not reserve — check connection.'); });
+    .catch(function(){ toast('Could not reserve — check connection.'); }).finally(function(){ btnDone(_b); });
 }
 
 function tbRemove(uid){
@@ -4333,12 +4370,12 @@ function tbConfirm(){
   var prev=tbBoxPreview(tbWeight());
   var order={ no:'', items:t.items.slice(), subtotal:tbSubtotal(), serviceCharge:tbServiceCharge(), certCharge:tbCertCharge(), total:tbTotal(),
     fulfil:'travel', shop:(shop&&shop.name), boxesLabel:prev.label, customer:{name:c.name,phone:c.phone}, status:'certificate_pending', date:new Date().toISOString() };
-  var btn=el('tbPayBtn'); if(btn){ btn.disabled=true; btn.textContent='Placing…'; }
+  var btn=el('tbPayBtn'); btnSpin(btn);
   fetch(API_BASE+'/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,status:r.status,res:res}; }); })
     .then(function(o){
       var res=o.res||{};
-      if(o.status===409 || res.error==='basket_empty_or_expired'){ if(btn){btn.disabled=false;btn.textContent='Confirm Travel Box';} toast('Your Travel Box hold expired — please add fish again.'); state.tb.items=[]; loadUnits(); go('tb-shop'); return; }
+      if(o.status===409 || res.error==='basket_empty_or_expired'){ btnDone(btn); toast('Your Travel Box hold expired — please add fish again.'); state.tb.items=[]; loadUnits(); go('tb-shop'); return; }
       if(o.ok && res.order_no){
         order.no=res.order_no; var od=res.order||{};
         if(od.total!=null) order.total=Number(od.total);
@@ -4348,10 +4385,10 @@ function tbConfirm(){
         saveOrderNo(order.no); state.orders.unshift(order);
         renderTbSuccess(order, shop); state.tb.items=[]; loadUnits(); go('tb-success'); return;
       }
-      if(btn){btn.disabled=false;btn.textContent='Confirm Travel Box';}
+      btnDone(btn);
       toast(res.error?('Could not place order: '+res.error):'Could not place Travel Box order');
     })
-    .catch(function(){ if(btn){btn.disabled=false;btn.textContent='Confirm Travel Box';} toast('Network problem — order not placed.'); });
+    .catch(function(){ btnDone(btn); toast('Network problem — order not placed.'); });
 }
 
 function renderTbSuccess(order, shop){
