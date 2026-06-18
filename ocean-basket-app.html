@@ -3910,27 +3910,34 @@ function renderSuccess(order){
   '</div>';
 }
 /* ---------- ORDERS ---------- */
+function emptyOrdersHTML(){
+  return '<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here once you place one \u2014 or enter an order code above to track one.</p><button class="btn gilt" style="width:auto;margin-top:6px" onclick="go(\'shop\')">Shop Fish</button></div>';
+}
+function orderLookupHTML(){
+  return '<div class="pad" style="padding-top:4px;padding-bottom:0"><div style="display:flex;gap:8px">'+
+    '<input id="order-lookup" autocomplete="off" placeholder="Enter order code (OCB-\u2026)" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();lookupOrder();}">'+
+    '<button class="btn gilt" style="width:auto;white-space:nowrap" onclick="lookupOrder()">Find</button>'+
+  '</div><div class="muted" style="font-size:12px;margin-top:6px">Placed an order on another device? Enter its code to track it here.</div></div>';
+}
+function lookupOrder(){
+  var inp=el('order-lookup'); if(!inp) return;
+  var code=(inp.value||'').trim().toUpperCase(); if(!code){ return; }
+  inp.disabled=true;
+  fetchStatus(code).then(function(r){
+    inp.disabled=false;
+    if(!r || r.__missing){ toast('Order not found \u2014 check the code.'); return; }
+    saveOrderNo(code); inp.value=''; renderOrders();
+  }).catch(function(){ inp.disabled=false; toast('Could not check \u2014 connection problem.'); });
+}
 function renderOrders(){
   var host=el('orders-host');
   var nos = savedOrderNos();
-  if(!nos.length && !state.orders.length){
-    host.innerHTML='<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here.</p><button class="btn gilt" style="width:auto" onclick="go(\'shop\')">Shop Fish</button></div>';
-    return;
-  }
-  host.innerHTML='<div class="sectit">Your orders</div><div id="orders-live" class="pad" style="padding-top:6px"><div class="muted" style="font-size:13px">Loading…</div></div>';
-
-  // fetch all statuses, then render
+  host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px">'+(nos.length?'<div class="muted" style="font-size:13px">Loading\u2026</div>':emptyOrdersHTML())+'</div>';
+  if(!nos.length) return;
   Promise.all(nos.map(function(no){ return fetchStatus(no); })).then(function(results){
-    // drop ghost numbers (404) from local storage so they stop being queried
     results.forEach(function(r){ if(r && r.__missing){ pruneOrderNo(r.__missing); } });
     var live=results.filter(function(r){ return r && !r.__missing; });
-    if(!live.length){
-      // fall back to local orders (e.g. offline) — but skip ghost numbers
-      var localCards = state.orders.map(orderCardLocal).join('');
-      el('orders-live').innerHTML = localCards || '<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here once you place one.</p></div>';
-      return;
-    }
-    el('orders-live').innerHTML = live.map(orderCardLive).join('');
+    el('orders-live').innerHTML = live.length ? live.map(orderCardLive).join('') : emptyOrdersHTML();
   });
 }
 function orderWhereLive(o){
