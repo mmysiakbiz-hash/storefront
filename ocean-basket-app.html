@@ -3221,9 +3221,10 @@ function loadCatalog(){
       if(Array.isArray(d.dropPoints) && d.dropPoints.length){
         var ZC={North:[-4.600,55.440],Central:[-4.632,55.450],South:[-4.762,55.502],East:[-4.668,55.492],West:[-4.660,55.408]};
         POINTS = d.dropPoints.map(function(dp,i){
-          var base=ZC[dp.zone]||[-4.640,55.455];
-          var lat=(dp.lat!=null?Number(dp.lat):base[0]+(Math.floor(i/5)-1)*0.012);
-          var lng=(dp.lng!=null?Number(dp.lng):base[1]+((i%5)-2)*0.013);
+          var DPGEO={D01:[-4.5882,55.4534],D02:[-4.6209,55.4322],D03:[-4.6191,55.4513],D04:[-4.6380,55.4585],D05:[-4.7650,55.5000],D06:[-4.6580,55.4935],D07:[-4.7350,55.5080],D08:[-4.7500,55.4860],D09:[-4.7690,55.5090],D10:[-4.7810,55.5050]};
+          var g=DPGEO[dp.id]||ZC[dp.zone]||[-4.640,55.455];
+          var lat=(dp.lat!=null?Number(dp.lat):g[0]);
+          var lng=(dp.lng!=null?Number(dp.lng):g[1]);
           return { n:i+1, id:dp.id, name:dp.name, zone:dp.zone||'', colorName:dp.color||'',
                    color:dp.hex||'#0a1140', address:dp.address||'', outlet:false,
                    lat:lat, lng:lng, phone:dp.phone };
@@ -4039,7 +4040,7 @@ function openSoldOut(id){
 function openSupport(){ initChat(); go('support'); }
 
 /* controlled assistant: approved Q&A + human handover (spec p.11) */
-var CHAT_CONTACT = { phone:'+248 4 000 000', whatsapp:'2484000000' };
+var CHAT_CONTACT = { phone:'+248 2 555 666', whatsapp:'2482555666', email:'sales@oceanbasket.fish' };
 var CHAT_KB = [
   // ----- Ordering -----
   { q:'How do I order?', cat:'Ordering', a:'Choose <b>Local Order</b> on the home screen, pick a fish, set the number of people and weight, then choose collection or delivery. It takes about a minute.' },
@@ -4129,8 +4130,9 @@ function chatHandover(){
     var wrap=el('chat-wrap');
     wrap.insertAdjacentHTML('beforeend',
       '<div class="chat-hand"><p>For refunds, complaints, special orders or anything unusual, our team will help you personally.</p>'+
-      '<div class="ha"><button class="call" onclick="toast(\'Calling '+CHAT_CONTACT.phone+'\')">'+svg('phone',16,1.5)+' Call</button>'+
-      '<button class="wa" onclick="toast(\'Opening WhatsApp\')">'+svg('chat',16,1.5)+' WhatsApp</button></div></div>');
+      '<div class="ha"><button class="call" onclick="window.open(\'tel:+'+CHAT_CONTACT.whatsapp+'\')">'+svg('phone',16,1.5)+' Call</button>'+
+      '<button class="wa" onclick="window.open(\'https://wa.me/'+CHAT_CONTACT.whatsapp+'\',\'_blank\')">'+svg('chat',16,1.5)+' WhatsApp</button>'+
+      '<button class="call" onclick="window.open(\'mailto:'+CHAT_CONTACT.email+'\')">\u2709 Email</button></div></div>');
     wrap.scrollTop=wrap.scrollHeight;
   }, 650);
 }
