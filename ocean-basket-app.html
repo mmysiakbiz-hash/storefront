@@ -3881,13 +3881,14 @@ function placeOrder(){
   var payload={
     session: sid(), type:'local',
     customer:name, phone:phone, email:state.customer.email,
+    payMethod: state.payMethod,
     fulfilment: state.fulfil==='pickup' ? 'dropoff' : 'door',
     dropPoint: state.fulfil==='pickup' ? (pt&&pt.id) : null,
     shop:null, travel:null
   };
   var order={ no:'', items:state.cart.slice(), subtotal:sub, deliveryFee:deliveryFee, total:total,
     fulfil:state.fulfil, point:state.point, doorCode:(state.fulfil==='delivery'?(deliveryFee===0?'GOLD':'SILVER'):null),
-    payMethod:state.payMethod, customer:Object.assign({},state.customer), status:'paid', date:new Date().toISOString() };
+    payMethod:state.payMethod, customer:Object.assign({},state.customer), status:(state.payMethod==='cash'?'pending_payment':'paid'), date:new Date().toISOString() };
 
   var btn=el('payBtn'); btnSpin(btn);
   fetch(API_BASE+'/orders',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
@@ -3905,6 +3906,7 @@ function placeOrder(){
         if(od.total!=null) order.total=Number(od.total);
         if(od.delivery_fee!=null) order.deliveryFee=Number(od.delivery_fee);
         if(od.door_code) order.doorCode=od.door_code;
+        if(od.status) order.status=od.status;
         saveOrderNo(order.no);
         state.orders.unshift(order);
         renderSuccess(order);
@@ -3918,17 +3920,47 @@ function placeOrder(){
 }
 /* ---------- SUCCESS ---------- */
 function qrSvg(t){ try{ var q=window.qrcode(0,'M'); q.addData(String(t)); q.make(); return q.createSvgTag({cellSize:4,margin:2}); }catch(e){ return ''; } }
+function _tkRound(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function _tkWrap(ctx,text,cx,y,maxW,lh){ var w=String(text).split(' '),line='',yy=y,i,t2; for(i=0;i<w.length;i++){ t2=line?line+' '+w[i]:w[i]; if(ctx.measureText(t2).width>maxW && line){ ctx.fillText(line,cx,yy); line=w[i]; yy+=lh; } else { line=t2; } } if(line) ctx.fillText(line,cx,yy); return yy; }
+function _tkQR(ctx,text,x,y,size){ try{ var q=window.qrcode(0,'M'); q.addData(String(text)); q.make(); var n=q.getModuleCount(), cell=size/n, r,c; ctx.fillStyle='#0a1140'; for(r=0;r<n;r++){ for(c=0;c<n;c++){ if(q.isDark(r,c)) ctx.fillRect(Math.floor(x+c*cell),Math.floor(y+r*cell),Math.ceil(cell),Math.ceil(cell)); } } }catch(e){} }
+function saveConfirmation(){
+  var t=state.lastTicket; if(!t){ toast('Nothing to save yet'); return; }
+  var W=720,H=820,sc=2;
+  var cv=document.createElement('canvas'); cv.width=W*sc; cv.height=H*sc; var ctx=cv.getContext('2d'); ctx.scale(sc,sc);
+  ctx.fillStyle='#faf7f0'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#0a1140'; ctx.fillRect(0,0,W,96);
+  ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.font='600 30px Arial'; ctx.fillText('Ocean Basket Seychelles',W/2,58);
+  var x=60,y=140,w=W-120,h=H-170;
+  ctx.fillStyle='#ffffff'; ctx.strokeStyle='#e6e0d6'; ctx.lineWidth=1.5; _tkRound(ctx,x,y,w,h,18); ctx.fill(); ctx.stroke();
+  ctx.textAlign='center';
+  ctx.fillStyle='#6b6b6b'; ctx.font='600 15px Arial'; ctx.fillText(String(t.kindLabel||'Order').toUpperCase(),W/2,y+42);
+  ctx.fillStyle='#0a1140'; ctx.font='700 38px Arial'; ctx.fillText(t.no,W/2,y+92);
+  var qs=300; _tkQR(ctx,t.no,W/2-qs/2,y+120,qs);
+  ctx.fillStyle='#6b6b6b'; ctx.font='600 14px Arial'; ctx.fillText('COLLECTION CODE',W/2,y+120+qs+30);
+  var ly=y+120+qs+66; ctx.fillStyle='#2c2c2c'; ctx.font='17px Arial';
+  (t.lines||[]).forEach(function(l){ if(l){ _tkWrap(ctx,l,W/2,ly,w-50,24); ly+=30; } });
+  ctx.fillStyle='#8a8a8a'; ctx.font='13px Arial'; _tkWrap(ctx,t.note||'',W/2,ly+12,w-50,19);
+  cv.toBlob(function(blob){
+    if(!blob){ toast('Could not create image'); return; }
+    var fname='ocean-basket-'+t.no+'.png';
+    try{ var file=new File([blob],fname,{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file], title:'Ocean Basket '+t.no}).catch(function(){}); return; }
+    }catch(e){}
+    var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); },3000);
+  },'image/png');
+}
 function renderSuccess(order){
   var pt=POINTS.filter(function(p){return p.n===order.point;})[0];
   var where = order.fulfil==='delivery'
     ? ('We\'ll deliver to your address on Mahé'+(order.doorCode?(' ('+order.doorCode+(order.doorCode==='GOLD'?' \u00b7 free':' \u00b7 paid')+')'):'')+'.')
     : ('Collect from '+(pt?(pt.id+' \u00b7 '+pt.name+' ('+(pt.colorName||'')+' label)'):'your point')+'.');
   var payTxt = order.payMethod==='cash' ? 'Pay on collection' : ('Paid \u00b7 '+(order.payMethod||'card'));
+  state.lastTicket={ no:order.no, kindLabel:'Order', lines:[ where, payTxt+'  ·  '+money2(order.total) ], note:'Show this QR or quote the code at collection or delivery.' };
   el('success-host').innerHTML='<div class="success">'+
     '<div class="check"></div>'+
     '<div class="step3">Order placed</div>'+
     '<h1>The kitchen has <em>your order.</em></h1>'+
-    '<div class="ono">Order <b>'+order.no+'</b> \u00b7 confirmation by WhatsApp to '+order.customer.phone+'</div>'+
+    '<div class="ono">Order <b>'+order.no+'</b> \u00b7 keep this code</div>'+
     '<div class="receipt"><div class="rqr">'+qrSvg(order.no)+'</div><div class="rlabel">Collection code</div><div class="rcode">'+order.no+'</div>'+
       '<div class="rmeta">'+payTxt+' \u00b7 '+money2(order.total)+'</div>'+
       '<div class="rnote">Scan this QR (or quote the code) at collection or delivery.</div></div>'+
@@ -3938,7 +3970,9 @@ function renderSuccess(order){
       '<div class="tl-item future"><div class="dot"></div><div class="tc"><h4>Packed &amp; chilled</h4><p>Labelled, dated, ready</p></div></div>'+
       '<div class="tl-item future"><div class="dot"></div><div class="tc"><div class="now">NEXT</div><h4>'+(order.fulfil==='delivery'?'Out for delivery':'Ready for collection')+'</h4><p>'+where+'</p></div></div>'+
     '</div>'+
-    '<button class="btn" onclick="go(\'orders\')">View my orders</button>'+
+    '<button class="btn gilt" onclick="saveConfirmation()">Save confirmation</button>'+
+    '<div class="muted" style="font-size:12px;margin:8px 0 2px">No account needed – also saved on this device under Orders. Keep the code.</div>'+
+    '<button class="btn" style="margin-top:6px" onclick="go(\'orders\')">View my orders</button>'+
     '<button class="btn ghost" style="margin-top:10px" onclick="go(\'shop\')">Order more fish</button>'+
   '</div>';
 }
@@ -4369,6 +4403,7 @@ function tbConfirm(){
     session: sid(), type:'travel',
     customer:c.name, phone:c.phone, email:'',
     fulfilment:null, dropPoint:null, shop:(shop&&shop.id)||null,
+    payMethod: state.payMethod,
     travel:{ date:t.date, collection_date:t.collectionDate, flight_time:t.flightTime, collection_time:t.collectionTime, destination:(dest?dest.label:t.destination), passport:c.passport, nationality:c.nationality, flight:t.flightNo }
   };
   var prev=tbBoxPreview(tbWeight());
@@ -4396,6 +4431,7 @@ function tbConfirm(){
 }
 
 function renderTbSuccess(order, shop){
+  state.lastTicket={ no:order.no, kindLabel:'Travel Box', lines:[ (order.boxesLabel||''), 'Total  '+money2(order.total), 'Status: certificate pending' ], note:'Bring your passport. Show this QR or quote the code at the shop.' };
   el('tb-success-host').innerHTML='<div class="success">'+
     '<div class="check"></div>'+
     '<div class="step3">Travel Box confirmed</div>'+
@@ -4410,7 +4446,9 @@ function renderTbSuccess(order, shop){
       '<div class="tl-item future"><div class="dot"></div><div class="tc"><h4>Packed &amp; chilled</h4><p>Sealed, ice-packed, airline-ready</p></div></div>'+
       '<div class="tl-item future"><div class="dot"></div><div class="tc"><div class="now">AT SHOP</div><h4>Inspect &amp; collect</h4><p>Collect at '+(shop?shop.name:'your shop')+' before sealing</p></div></div>'+
     '</div>'+
-    '<button class="btn" onclick="go(\'orders\')">View my orders</button>'+
+    '<button class="btn gilt" onclick="saveConfirmation()">Save confirmation</button>'+
+    '<div class="muted" style="font-size:12px;margin:8px 0 2px">No account needed – also saved on this device under Orders. Keep the code.</div>'+
+    '<button class="btn" style="margin-top:6px" onclick="go(\'orders\')">View my orders</button>'+
     '<button class="btn ghost" style="margin-top:10px" onclick="go(\'home\')">Back to home</button>'+
   '</div>';
 }
