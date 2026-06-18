@@ -77,6 +77,8 @@ a{color:var(--ink)}
 .field input,.field select,.field textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:4px;background:#fff}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gilt)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ckline{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:5px 0}
+.ckline input{width:auto}
 .row-flex{display:flex;gap:10px;align-items:flex-end}
 .form-line{display:grid;grid-template-columns:1fr 110px 90px 36px;gap:8px;align-items:center;margin-bottom:8px}
 .form-line input,.form-line select{padding:10px;font-size:13px}
@@ -198,6 +200,7 @@ a{color:var(--ink)}
     <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
     <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
     <button data-tab="shops" onclick="tab('shops')">4-Shop Stock</button>
+    <button data-tab="users" onclick="tab('users')">Users</button>
   </div>
   <div class="wrap">
     <div class="panel on" id="p-dashboard"><div class="loading">Loading…</div></div>
@@ -208,6 +211,7 @@ a{color:var(--ink)}
     <div class="panel" id="p-routes"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
   </div>
 </div>
 
@@ -274,13 +278,13 @@ function onLogin(user){
   el('login').style.display='none';
   el('shell').classList.add('on');
   el('who').textContent=user.email;
-  loadAll();
+  loadMe().then(function(){ applyGating(); loadAll(); });
 }
 
 /* ---------- LOAD DATA ---------- */
 function loadAll(){
-  return Promise.all([loadCatalog(), loadUnits(), loadOrders(), loadMinimums()]).then(function(){
-    renderDashboard(); renderScan(); renderInventory(); renderOrders(); renderPicklists(); renderRoutes(); renderReplenish(); renderShops();
+  return Promise.all([loadCatalog(), loadUnits(), loadOrders(), loadMinimums(), loadStaff()]).then(function(){
+    renderDashboard(); renderScan(); renderInventory(); renderOrders(); renderPicklists(); renderRoutes(); renderReplenish(); renderShops(); renderUsers(); applyGating();
   });
 }
 function loadCatalog(){
@@ -529,9 +533,10 @@ function renderReplenish(){
 
 /* ================= 8. 4-SHOP LIVE STOCK ================= */
 function renderShops(){
-  var shopOpts=state.shops.map(function(sh){ return '<option value="'+sh.id+'">'+sh.name+'</option>'; }).join('');
+  var _allowShops=state.shops.filter(function(sh){ return meShopAllowed(sh.id); });
+  var shopOpts=_allowShops.map(function(sh){ return '<option value="'+sh.id+'">'+sh.name+'</option>'; }).join('');
   var prodOpts=state.products.map(function(p){ return '<option value="'+p.id+'">'+p.name+' ('+(p.code||'')+')</option>'; }).join('');
-  var editor='<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Update stock</h3>'+
+  var editor=(can('can_edit_stock') && _allowShops.length)?('<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Update stock</h3>'+
     '<p class="muted" style="font-size:13px;margin-bottom:14px">Three ways to pick a fish: scan/type a barcode, scan with the camera, or choose it from the list \u2014 then set fresh / frozen kg for the chosen shop.</p>'+
     '<div class="field"><label>Shop</label><select id="ss-shop" onchange="ssPrefill()">'+shopOpts+'</select></div>'+
     '<div class="field"><label>Scan / type barcode</label><input id="ss-barcode" autocomplete="off" placeholder="scan or type a code, then Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ssResolve();}"><div class="muted" style="font-size:12px;margin-top:5px">A USB/Bluetooth scanner types the code then Enter. On a phone, use the camera button.</div></div>'+
@@ -541,7 +546,7 @@ function renderShops(){
       '<div class="field"><label>Fresh (kg)</label><input id="ss-fresh" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
       '<div class="field"><label>Frozen (kg)</label><input id="ss-frozen" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
     '</div>'+
-    '<button class="btn gilt" onclick="ssSave()">Save stock</button></div>';
+    '<button class="btn gilt" onclick="ssSave()">Save stock</button></div>'):'';
   var cards=state.shops.map(function(sh){
     var rows=state.shopStock.filter(function(s){return s.shop_id===sh.id;}).map(function(s){ return '<div class="rep-row"><span>'+pname(s.product_id)+'</span><span class="rep-v">'+Number(s.fresh_kg||0).toFixed(1)+' kg fresh · '+Number(s.frozen_kg||0).toFixed(1)+' kg frozen</span></div>'; }).join('')||'<div class="muted" style="font-size:13px">No stock recorded.</div>';
     return '<div class="card"><h3 style="font-size:18px;margin-bottom:8px">'+sh.name+'</h3>'+rows+'</div>';
@@ -623,6 +628,81 @@ function doRefresh(btn, fn){
 }
 
 /* check session on load (restores session + after magic-link redirect) */
+
+/* ================= STAFF / ROLES / PERMISSIONS ================= */
+function loadMe(){
+  return sb.rpc('ob_me').then(function(res){
+    var d=res&&res.data;
+    state.me=(d&&typeof d==='object'&&!Array.isArray(d))?d:(Array.isArray(d)?(d[0]||null):null);
+  }).catch(function(){ state.me=null; });
+}
+function loadStaff(){
+  return sb.from('ob_staff').select('*').eq('store_id',STORE_ID).then(function(r){ state.staff=(r&&r.data)||[]; });
+}
+/* null state.me = legacy/full (e.g. before SQL is run); server-side RLS is the real gate */
+function can(perm){ var m=state.me; if(!m) return true; if(m.role==='owner') return true; return !!m[perm]; }
+function meShopAllowed(id){ var m=state.me; if(!m||m.role==='owner') return true; if(!m.shop_ids||!m.shop_ids.length) return true; return m.shop_ids.indexOf(id)>-1; }
+function shopName(id){ var s=(state.shops||[]).filter(function(x){return x.id===id;})[0]; return s?s.name:id; }
+
+var TAB_PERM={ scan:'can_scan', orders:'can_view_orders', picklists:'can_view_orders', routes:'can_manage_routes', shops:'can_edit_stock', users:'can_manage_users' };
+function applyGating(){
+  var activeHidden=false;
+  document.querySelectorAll('.tabs button[data-tab]').forEach(function(b){
+    var t=b.getAttribute('data-tab'); var perm=TAB_PERM[t];
+    var show=!perm || can(perm);
+    b.style.display=show?'':'none';
+    if(!show && b.classList.contains('on')) activeHidden=true;
+  });
+  if(activeHidden){ tab('dashboard'); }
+}
+
+function renderUsers(){
+  var host=el('p-users'); if(!host) return;
+  if(!can('can_manage_users')){
+    host.innerHTML='<div class="section-head"><h2>Users</h2></div><div class="card"><p class="muted" style="font-size:13px">You don\u2019t have permission to manage users.</p></div>';
+    return;
+  }
+  var rows=(state.staff||[]).map(function(u){
+    var shops=(u.shop_ids&&u.shop_ids.length)?u.shop_ids.map(shopName).join(', '):'all shops';
+    var perms=['can_scan','can_edit_stock','can_view_orders','can_manage_routes','can_manage_users'].filter(function(k){return u[k];}).map(function(k){return k.replace('can_','').replace('_',' ');}).join(' \u00b7 ')||'\u2014';
+    return '<div class="rep-row"><span><b>'+(u.full_name||u.email)+'</b> \u00b7 '+u.email+'<br><span class="muted" style="font-size:12px">'+u.role+' \u00b7 '+shops+' \u00b7 '+perms+(u.active?'':' \u00b7 <i>inactive</i>')+'</span></span>'+
+      '<span><button class="btn ghost sm" onclick="userEdit('+u.id+')">Edit</button></span></div>';
+  }).join('')||'<div class="muted" style="font-size:13px">No staff yet.</div>';
+  host.innerHTML='<div class="section-head"><h2>Users</h2><button class="btn gilt sm" onclick="userForm(null)">+ Add staff</button></div>'+
+    '<div class="card"><p class="muted" style="font-size:12.5px;margin-bottom:12px">Each person signs in with their <b>own</b> Supabase account. After adding them here, invite the email in Supabase Auth (Authentication \u2192 Users) or have them sign up with it \u2014 their role &amp; permissions apply on first login.</p>'+rows+'</div>';
+}
+function userEdit(id){ var u=(state.staff||[]).filter(function(x){return x.id===id;})[0]; userForm(u||null); }
+function userForm(u){
+  u=u||{};
+  var shopCx=(state.shops||[]).map(function(sh){ var on=((u.shop_ids||[]).indexOf(sh.id)>-1)?'checked':''; return '<label class="ckline"><input type="checkbox" data-grp="u-shop" value="'+sh.id+'" '+on+'> '+sh.name+'</label>'; }).join('');
+  var pointCx=(state.drops||[]).map(function(dp){ var on=((u.point_ids||[]).indexOf(dp.id)>-1)?'checked':''; return '<label class="ckline"><input type="checkbox" data-grp="u-point" value="'+dp.id+'" '+on+'> '+dp.id+' \u00b7 '+dp.name+'</label>'; }).join('');
+  function pc(k,lbl){ return '<label class="ckline"><input type="checkbox" id="u-'+k+'" '+(u[k]?'checked':'')+'> '+lbl+'</label>'; }
+  el('modal').innerHTML='<h3 style="font-size:20px;margin-bottom:14px">'+(u.id?'Edit staff':'Add staff')+'</h3>'+
+    '<div class="field"><label>Email (their login)</label><input id="u-email" type="email" value="'+(u.email||'')+'" '+(u.id?'readonly':'')+' placeholder="name@oceanbasket.sc"></div>'+
+    '<div class="field"><label>Full name</label><input id="u-name" value="'+(u.full_name||'')+'"></div>'+
+    '<div class="field"><label>Role</label><select id="u-role"><option value="staff">staff</option><option value="manager">manager</option><option value="owner">owner</option></select></div>'+
+    '<div class="field"><label>Permissions</label>'+pc('can_scan','Scan-in stock')+pc('can_edit_stock','Edit 4-shop stock')+pc('can_view_orders','View orders &amp; pick lists')+pc('can_manage_routes','Manage routes / points')+pc('can_manage_users','Manage users')+'</div>'+
+    '<div class="field"><label>Shops <span class="muted" style="font-weight:400">(none ticked = all)</span></label>'+(shopCx||'<span class="muted" style="font-size:13px">no shops</span>')+'</div>'+
+    '<div class="field"><label>Points <span class="muted" style="font-weight:400">(none ticked = all)</span></label><div style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:4px;padding:8px">'+(pointCx||'<span class="muted" style="font-size:13px">no points</span>')+'</div></div>'+
+    '<label class="ckline"><input type="checkbox" id="u-active" '+(u.id?(u.active?'checked':''):'checked')+'> Active</label>'+
+    '<div style="display:flex;gap:10px;margin-top:18px"><button class="btn gilt" onclick="userSave('+(u.id||'null')+')">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>';
+  el('u-role').value=u.role||'staff';
+  el('modal-bg').classList.add('on');
+}
+function _chk(grp){ return Array.prototype.slice.call(document.querySelectorAll('input[data-grp="'+grp+'"]:checked')).map(function(c){return c.value;}); }
+function userSave(id){
+  var email=(el('u-email').value||'').trim().toLowerCase(); if(!email){ toast('Email is required'); return; }
+  var rec={ store_id:STORE_ID, email:email, full_name:(el('u-name').value||'').trim(), role:el('u-role').value, active:el('u-active').checked,
+    shop_ids:_chk('u-shop'), point_ids:_chk('u-point'),
+    can_scan:el('u-can_scan').checked, can_edit_stock:el('u-can_edit_stock').checked, can_view_orders:el('u-can_view_orders').checked,
+    can_manage_routes:el('u-can_manage_routes').checked, can_manage_users:el('u-can_manage_users').checked };
+  if(id){ rec.id=id; }
+  sb.from('ob_staff').upsert(rec,{ onConflict:'store_id,email' }).then(function(res){
+    if(res.error){ toast('Error: '+res.error.message); return; }
+    toast('Saved \u00b7 '+email); closeModal(); Promise.resolve(loadStaff()).then(renderUsers);
+  });
+}
+
 boot();
 
 </script>
