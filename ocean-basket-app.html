@@ -3327,7 +3327,7 @@ var state = {
   customer:{ name:'', phone:'', address:'', email:'' },
   orders:[],
   tbMode:false,
-  tb:{ shop:null, date:'', flightTime:'', collectionTime:'', destination:'', airline:'', flightNo:'',
+  tb:{ shop:null, collectionDate:'', date:'', flightTime:'', collectionTime:'', destination:'', airline:'', flightNo:'',
        items:[], traveller:{ name:'', passport:'', nationality:'', phone:'' } }
 };
 
@@ -4204,9 +4204,10 @@ function renderTbFlight(){
   el('tb-flight-host').innerHTML='<div class="pad">'+
     '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. Maximum net weight '+tbCap()+' kg.</p>'+
     '<div class="field"><label>Collection shop</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
-    '<div class="field"><label>Travel date</label><input id="tb-date" type="date" min="'+tomorrow+'" value="'+(t.date||'')+'"></div>'+
-    '<div class="field"><label>Flight time</label><input id="tb-ftime" type="time" value="'+(t.flightTime||'')+'"></div>'+
+    '<div class="field"><label>Collection date</label><input id="tb-cdate" type="date" min="'+tomorrow+'" value="'+(t.collectionDate||'')+'" oninput="tbSyncFlightMin(this.value)"></div>'+
     '<div class="field"><label>Collection time</label><input id="tb-ctime" type="time" value="'+(t.collectionTime||'')+'"></div>'+
+    '<div class="field"><label>Flight date</label><input id="tb-date" type="date" min="'+(t.collectionDate||tomorrow)+'" value="'+(t.date||'')+'"></div>'+
+    '<div class="field"><label>Flight time</label><input id="tb-ftime" type="time" value="'+(t.flightTime||'')+'"></div>'+
     '<div class="field"><label>Destination (optional)</label>'+obSelectHTML('sel-dest', destOptions, t.destination||'', 'Select destination')+'</div>'+
     '<div class="field"><label>Airline (optional)</label>'+obSelectHTML('sel-air', airOptions, t.airline||'', 'Select airline')+'</div>'+
     '<div class="field"><label>Flight number (optional)</label><input id="tb-fno" placeholder="e.g. HM 708" value="'+(t.flightNo||'')+'"></div>'+
@@ -4218,23 +4219,32 @@ window._obselCallbacks['sel-tbshop']=function(v){ state.tb.shop=v; var b=documen
 window._obselCallbacks['sel-dest']=function(v){ state.tb.destination=v; var b=document.querySelector('#sel-dest .obsel-val'); if(b){ var d=TB_DEST.filter(function(x){return x.code===v;})[0]; b.textContent=d?d.label:v; b.classList.remove('placeholder'); } };
 window._obselCallbacks['sel-air']=function(v){ state.tb.airline=v; var b=document.querySelector('#sel-air .obsel-val'); if(b){ b.textContent=v; b.classList.remove('placeholder'); } };
 
+function tbSyncFlightMin(v){ var f=el('tb-date'); if(!f) return; f.min=v; if(f.value && f.value < v){ f.value=v; } }
 function tbValidateFlight(){
   var t=state.tb;
-  t.date=el('tb-date').value; t.flightTime=el('tb-ftime').value; t.collectionTime=el('tb-ctime').value; t.flightNo=el('tb-fno').value.trim();
-  if(!t.shop){ toast('Please choose a collection shop'); return; }
-  if(!t.date){ toast('Please add a travel date'); return; }
-  var d=new Date(t.date+'T00:00:00'); var today=new Date(); today.setHours(0,0,0,0);
-  var tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
-  if(d < tomorrow){
-    var pad=el('tb-flight-host').querySelector('.pad');
-    if(!el('tb-rej')) pad.insertAdjacentHTML('beforeend','<div class="tb-reject" id="tb-rej">Travel boxes are prepared for next-day collection. Please choose a date from tomorrow onwards, or visit a shop directly.</div>');
-    var r=el('tb-rej'); if(r) r.scrollIntoView({behavior:'smooth'}); return;
+  t.collectionDate=el('tb-cdate').value; t.date=el('tb-date').value;
+  t.flightTime=el('tb-ftime').value; t.collectionTime=el('tb-ctime').value; t.flightNo=el('tb-fno').value.trim();
+  function tbReject(msg){
+    var pad=el('tb-flight-host').querySelector('.pad'); var ex=el('tb-rej'); if(ex){ ex.remove(); }
+    pad.insertAdjacentHTML('beforeend','<div class="tb-reject" id="tb-rej">'+msg+'</div>');
+    var r=el('tb-rej'); if(r){ r.scrollIntoView({behavior:'smooth'}); }
   }
-  if(!t.flightTime||!t.collectionTime){ toast('Please add flight time and collection time'); return; }
-  var _ct=t.collectionTime.split(':'), _ft=t.flightTime.split(':');
-  var _cMin=(+_ct[0])*60+(+_ct[1]), _fMin=(+_ft[0])*60+(+_ft[1]);
-  if(_cMin>=_fMin){ toast('Collection time must be before your flight time.'); return; }
-  if(_fMin-_cMin<60){ toast('Please leave at least 1 hour between collection and your flight.'); return; }
+  if(!t.shop){ toast('Please choose a collection shop'); return; }
+  if(!t.collectionDate){ toast('Please add a collection date'); return; }
+  if(!t.collectionTime){ toast('Please add a collection time'); return; }
+  if(!t.date){ toast('Please add your flight date'); return; }
+  if(!t.flightTime){ toast('Please add your flight time'); return; }
+  var today=new Date(); today.setHours(0,0,0,0);
+  var tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
+  var cd=new Date(t.collectionDate+'T00:00:00'), fd=new Date(t.date+'T00:00:00');
+  if(cd < tomorrow){ tbReject('Travel boxes are prepared for next-day collection. Please choose a collection date from tomorrow onwards, or visit a shop directly.'); return; }
+  if(fd < cd){ tbReject('Your flight date is before your collection date \u2013 please check the dates.'); return; }
+  if(fd.getTime()===cd.getTime()){
+    var _ct=t.collectionTime.split(':'), _ft=t.flightTime.split(':');
+    var _cMin=(+_ct[0])*60+(+_ct[1]), _fMin=(+_ft[0])*60+(+_ft[1]);
+    if(_cMin>=_fMin){ toast('On your flight day, collection must be before your flight time.'); return; }
+    if(_fMin-_cMin<60){ toast('Please leave at least 1 hour between collection and your flight.'); return; }
+  }
   state.tbMode=true; renderTbShop(); go('tb-shop');
 }
 
@@ -4336,7 +4346,7 @@ function renderTbCollect(){
   var shop=SHOPS.filter(function(x){return x.id===t.shop;})[0];
   var sub=tbSubtotal(), svc=tbServiceCharge(), cert=tbCertCharge(), total=sub+svc+cert;
   el('tb-collect-host').innerHTML='<div class="pad">'+
-    '<div class="info-banner" style="margin-bottom:14px">Collecting at <b style="margin:0 4px">'+(shop?shop.name:'—')+'</b> on '+(t.date||'')+(t.collectionTime?(' \u00b7 '+t.collectionTime):'')+'</div>'+
+    '<div class="info-banner" style="margin-bottom:14px">Collecting at <b style="margin:0 4px">'+(shop?shop.name:'—')+'</b> on '+(t.collectionDate||'')+(t.collectionTime?(' \u00b7 '+t.collectionTime):'')+'</div>'+
     '<h3 style="font-size:16px;margin:6px 0 4px">Health / export certificate</h3>'+
     '<p class="muted" style="font-size:12.5px;margin-bottom:12px">Required for your veterinary / export certificate ('+money(cert)+').</p>'+
     '<div class="field"><label>Full name (as on passport)</label><input id="tb-tname" placeholder="Full name" value="'+(c.name||'')+'"></div>'+
@@ -4367,7 +4377,7 @@ function tbConfirm(){
     session: sid(), type:'travel',
     customer:c.name, phone:c.phone, email:'',
     fulfilment:null, dropPoint:null, shop:(shop&&shop.id)||null,
-    travel:{ date:t.date, flight_time:t.flightTime, collection_time:t.collectionTime, destination:(dest?dest.label:t.destination), passport:c.passport, nationality:c.nationality, flight:t.flightNo }
+    travel:{ date:t.date, collection_date:t.collectionDate, flight_time:t.flightTime, collection_time:t.collectionTime, destination:(dest?dest.label:t.destination), passport:c.passport, nationality:c.nationality, flight:t.flightNo }
   };
   var prev=tbBoxPreview(tbWeight());
   var order={ no:'', items:t.items.slice(), subtotal:tbSubtotal(), serviceCharge:tbServiceCharge(), certCharge:tbCertCharge(), total:tbTotal(),
