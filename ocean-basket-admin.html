@@ -529,11 +529,83 @@ function renderReplenish(){
 
 /* ================= 8. 4-SHOP LIVE STOCK ================= */
 function renderShops(){
+  var shopOpts=state.shops.map(function(sh){ return '<option value="'+sh.id+'">'+sh.name+'</option>'; }).join('');
+  var prodOpts=state.products.map(function(p){ return '<option value="'+p.id+'">'+p.name+' ('+(p.code||'')+')</option>'; }).join('');
+  var editor='<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Update stock</h3>'+
+    '<p class="muted" style="font-size:13px;margin-bottom:14px">Three ways to pick a fish: scan/type a barcode, scan with the camera, or choose it from the list \u2014 then set fresh / frozen kg for the chosen shop.</p>'+
+    '<div class="field"><label>Shop</label><select id="ss-shop" onchange="ssPrefill()">'+shopOpts+'</select></div>'+
+    '<div class="field"><label>Scan / type barcode</label><input id="ss-barcode" autocomplete="off" placeholder="scan or type a code, then Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ssResolve();}"><div class="muted" style="font-size:12px;margin-top:5px">A USB/Bluetooth scanner types the code then Enter. On a phone, use the camera button.</div></div>'+
+    '<button class="btn ghost sm" style="width:auto;margin-bottom:14px" onclick="ssCameraScan()">\ud83d\udcf7 Scan with camera</button>'+
+    '<div class="field"><label>Product</label><select id="ss-prod" onchange="ssPrefill()">'+prodOpts+'</select></div>'+
+    '<div class="grid2">'+
+      '<div class="field"><label>Fresh (kg)</label><input id="ss-fresh" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
+      '<div class="field"><label>Frozen (kg)</label><input id="ss-frozen" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
+    '</div>'+
+    '<button class="btn gilt" onclick="ssSave()">Save stock</button></div>';
   var cards=state.shops.map(function(sh){
     var rows=state.shopStock.filter(function(s){return s.shop_id===sh.id;}).map(function(s){ return '<div class="rep-row"><span>'+pname(s.product_id)+'</span><span class="rep-v">'+Number(s.fresh_kg||0).toFixed(1)+' kg fresh · '+Number(s.frozen_kg||0).toFixed(1)+' kg frozen</span></div>'; }).join('')||'<div class="muted" style="font-size:13px">No stock recorded.</div>';
     return '<div class="card"><h3 style="font-size:18px;margin-bottom:8px">'+sh.name+'</h3>'+rows+'</div>';
   }).join('');
-  el('p-shops').innerHTML='<div class="section-head"><h2>4-Shop Live Stock</h2></div>'+(cards||'<div class="empty"><h3>No shops</h3></div>');
+  el('p-shops').innerHTML='<div class="section-head"><h2>4-Shop Live Stock</h2></div>'+editor+(cards||'<div class="empty"><h3>No shops</h3></div>');
+  ssPrefill();
+}
+/* ----- 4-shop stock editor: barcode (type/scanner), camera, or manual ----- */
+function ssResolve(){
+  var code=(el('ss-barcode').value||'').trim(); if(!code){ return; }
+  var up=code.toUpperCase(); var m=skuMap();
+  var skus=Object.keys(m).sort(function(a,b){return b.length-a.length;});
+  var pid=null;
+  for(var i=0;i<skus.length;i++){ if(up===skus[i]||up.indexOf(skus[i])===0){ pid=m[skus[i]].product; break; } }
+  if(!pid){ var p=(state.products||[]).filter(function(x){ return x.code && (up===String(x.code).toUpperCase()||up.indexOf(String(x.code).toUpperCase())===0); })[0]; if(p) pid=p.id; }
+  if(pid){ el('ss-prod').value=pid; ssPrefill(); toast('Barcode \u2192 '+pname(pid)); var f=el('ss-fresh'); if(f){ f.focus(); } }
+  else { toast('Unknown barcode \u2014 pick the product manually'); }
+}
+function ssPrefill(){
+  var shopEl=el('ss-shop'), prodEl=el('ss-prod'); if(!shopEl||!prodEl){ return; }
+  var shop=shopEl.value, pid=prodEl.value;
+  var row=(state.shopStock||[]).filter(function(s){return s.shop_id===shop&&s.product_id===pid;})[0];
+  if(el('ss-fresh')){ el('ss-fresh').value=row?Number(row.fresh_kg||0):''; }
+  if(el('ss-frozen')){ el('ss-frozen').value=row?Number(row.frozen_kg||0):''; }
+}
+function ssSave(){
+  var shop=el('ss-shop').value, pid=el('ss-prod').value;
+  var fresh=parseFloat(el('ss-fresh').value)||0, frozen=parseFloat(el('ss-frozen').value)||0;
+  if(!shop||!pid){ toast('Pick a shop and a product'); return; }
+  if(fresh<0||frozen<0){ toast('Stock cannot be negative'); return; }
+  sb.from('ob_shop_stock').upsert({ shop_id:shop, product_id:pid, fresh_kg:fresh, frozen_kg:frozen, updated_at:new Date().toISOString() }, { onConflict:'shop_id,product_id' })
+    .then(function(res){
+      if(res.error){ toast('Error: '+res.error.message); return; }
+      var shopName=(state.shops.filter(function(s){return s.id===shop;})[0]||{}).name||shop;
+      toast('Saved \u00b7 '+pname(pid)+' @ '+shopName);
+      loadCatalog().then(function(){ renderShops(); });
+    });
+}
+var _ssStream=null,_ssDet=null,_ssRAF=null;
+function ssCameraScan(){
+  if(!('BarcodeDetector' in window)){ toast('Camera scan not supported here \u2014 type the code or use a USB scanner.'); return; }
+  try{ _ssDet=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf','codabar','qr_code']}); }
+  catch(e){ try{ _ssDet=new BarcodeDetector(); }catch(e2){ toast('Camera scan unavailable on this device.'); return; } }
+  var ov=document.createElement('div'); ov.id='ss-cam';
+  ov.style.cssText='position:fixed;inset:0;background:#000;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px';
+  ov.innerHTML='<video id="ss-video" autoplay playsinline muted style="max-width:94%;max-height:74%;border-radius:8px"></video><div style="color:#fff;font-size:14px">Point the camera at the barcode</div><button id="ss-cam-x" style="padding:11px 20px;border-radius:8px;border:none;background:#fff;color:#0a1140;font-weight:700;font-family:inherit">Cancel</button>';
+  document.body.appendChild(ov);
+  var xb=document.getElementById('ss-cam-x'); if(xb){ xb.onclick=ssStopCamera; }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+    _ssStream=stream; var v=document.getElementById('ss-video'); if(v){ v.srcObject=stream; }
+    var tick=function(){
+      if(!_ssStream||!v){ return; }
+      _ssDet.detect(v).then(function(codes){
+        if(codes&&codes.length){ var val=codes[0].rawValue; ssStopCamera(); var bi=el('ss-barcode'); if(bi){ bi.value=val; } ssResolve(); }
+        else { _ssRAF=requestAnimationFrame(tick); }
+      }).catch(function(){ _ssRAF=requestAnimationFrame(tick); });
+    };
+    _ssRAF=requestAnimationFrame(tick);
+  }).catch(function(){ ssStopCamera(); toast('Camera unavailable \u2014 type the code instead.'); });
+}
+function ssStopCamera(){
+  if(_ssRAF){ cancelAnimationFrame(_ssRAF); _ssRAF=null; }
+  if(_ssStream){ _ssStream.getTracks().forEach(function(t){t.stop();}); _ssStream=null; }
+  var ov=document.getElementById('ss-cam'); if(ov){ ov.remove(); }
 }
 
 /* ================= UI ================= */
