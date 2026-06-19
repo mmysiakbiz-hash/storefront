@@ -3349,8 +3349,6 @@ function speciesById(id){ return CATALOG.find(function(s){return s.id===id}); }
 function shopStockBlock(pid){
   var ps = SHOP_STOCK[pid] || {};
   var list = SHOPS;
-  var travelOne = !!(state.tbMode && state.tb && state.tb.shop);
-  if(travelOne){ list = SHOPS.filter(function(sh){ return sh.id===state.tb.shop; }); }
   function q(k){ return k>0?((k%1?k.toFixed(1):k)+' kg'):'\u2014'; }
   var any=false;
   var cards = list.map(function(sh){
@@ -3362,7 +3360,7 @@ function shopStockBlock(pid){
         '<span>Frozen <b style="color:'+(z>0?'var(--ink)':'var(--mut)')+'">'+q(z)+'</b></span>'+
       '</span></div>';
   }).join('');
-  var label = travelOne ? 'At your collection shop' : 'Also at our shops';
+  var label = 'Also at our shops';
   return '<div class="cfg-block"><label>'+label+'</label>'+
     '<p class="muted" style="font-size:12.5px;margin:-2px 0 8px">Current stock at our shops \u2014 buy in person if you need it now'+(any?'':' \u2014 none recorded right now')+'. By weight (fresh / frozen); shops cut to order.</p>'+
     cards+'</div>';
