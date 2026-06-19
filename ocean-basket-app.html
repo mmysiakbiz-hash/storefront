@@ -3246,6 +3246,7 @@ var CFG = {
   orderPrefix: 'OB',
   gramsPerPerson: 250,
   tolLow: 225, tolHigh: 275,
+  gramsWhole: 500, wholeLow: 450, wholeHigh: 550,
   deliveryFee: 150,
   freeFrom: 2000,
   upsellAt: 0.70
@@ -3340,13 +3341,9 @@ function fmtKg(g){ return (g/1000).toFixed(g%1000===0?0:2)+' kg'; }
 function el(id){ return document.getElementById(id); }
 
 /* portion engine: people -> target grams (rounded to 250) */
-function suggestedGrams(people){ return people * CFG.gramsPerPerson; }
-function rangeFor(grams){
-  var per = grams / (grams/ CFG.gramsPerPerson || 1);
-  // acceptable range scales tolerance per portion
-  var ppl = Math.max(1, Math.round(grams / CFG.gramsPerPerson));
-  return { lo: CFG.tolLow*ppl, hi: CFG.tolHigh*ppl };
-}
+function perPortionG(cut){ return cut==='whole' ? CFG.gramsWhole : CFG.gramsPerPerson; }
+function portionBandG(cut){ return cut==='whole' ? { lo:CFG.wholeLow, hi:CFG.wholeHigh } : { lo:CFG.tolLow, hi:CFG.tolHigh }; }
+function impliedPeople(weightKg, cut){ return Math.max(1, Math.round(weightKg*1000 / perPortionG(cut))); }
 
 /* ---------- NAV ---------- */
 function go(screen){
@@ -3504,28 +3501,18 @@ function recsFor(){
   var s=state.product, c=state.cfg;
   if(s.type==='bottle'){
     var b=AVAIL.filter(function(u){ return u.product_id===s.id && u.cut==='bottle' && !cartHasUid(u.uid); });
-    return b.slice(0,1).map(function(u){ return {key:u.uid, title:'Bottle', desc:u.uid, uids:[u.uid], weight:0, packs:1, price:u.total, exact:true}; });
+    return b.slice(0,1).map(function(u){ return {key:u.uid, title:'Bottle', desc:u.uid, uids:[u.uid], weight:0, people:1, price:u.total, exact:true}; });
   }
-  var N=c.packs, out=[];
-  var items=unitsForSel(s,c.state,c.cut).slice().sort(function(a,b){ return a.packs-b.packs; });
-  items.filter(function(it){ return it.packs===N; }).slice(0,3).forEach(function(it){
-    out.push({key:it.uid, title:'Exact match \u00b7 '+it.packs+' pack'+(it.packs>1?'s':''), desc:fmtKg(it.weight_kg*1000)+' \u00b7 '+it.uid, uids:[it.uid], weight:it.weight_kg, packs:it.packs, price:it.total, exact:true});
+  var people=c.people||1, per=perPortionG(c.cut), band=portionBandG(c.cut);
+  var targetG=people*per, loG=people*band.lo, hiG=people*band.hi;
+  var items=unitsForSel(s,c.state,c.cut).slice();
+  items.sort(function(a,b){ return Math.abs(a.weight_kg*1000-targetG) - Math.abs(b.weight_kg*1000-targetG); });
+  return items.slice(0,5).map(function(u){
+    var g=u.weight_kg*1000, ppl=Math.max(1,Math.round(g/per)), inBand=(g>=loG-1e-6 && g<=hiG+1e-6);
+    var title = inBand ? ('Good fit \u00b7 ~'+ppl+(ppl>1?' people':' person'))
+                       : ((g>targetG?'A bit more':'A bit less')+' \u00b7 ~'+ppl+(ppl>1?' people':' person'));
+    return {key:u.uid, title:title, desc:fmtKg(g)+' \u00b7 '+u.uid, uids:[u.uid], weight:u.weight_kg, people:ppl, price:u.total, exact:inBand};
   });
-  if((c.cut==='fillet'||c.cut==='portions') && out.length<3){
-    var sm=items.filter(function(it){ return it.packs<N; });
-    for(var x=0;x<sm.length;x++){ for(var y=x+1;y<sm.length;y++){
-      if(sm[x].packs+sm[y].packs===N && out.length<4){
-        var a=sm[x], bb=sm[y];
-        out.push({key:a.uid+'+'+bb.uid, title:'Combination \u00b7 '+a.packs+'+'+bb.packs+' packs', desc:fmtKg((a.weight_kg+bb.weight_kg)*1000), uids:[a.uid,bb.uid], weight:a.weight_kg+bb.weight_kg, packs:N, price:a.total+bb.total, exact:true});
-      }
-    }}
-  }
-  if(out.length<3){
-    items.filter(function(it){ return !out.some(function(o){ return o.uids.indexOf(it.uid)>-1; }); }).slice(0,3-out.length).forEach(function(it){
-      out.push({key:it.uid, title:'Closest \u00b7 '+it.packs+' pack fit', desc:(it.packs>N?'a bit more':'a bit less')+' \u00b7 '+fmtKg(it.weight_kg*1000)+' \u00b7 '+it.uid, uids:[it.uid], weight:it.weight_kg, packs:it.packs, price:it.total, exact:false});
-    });
-  }
-  return out;
 }
 
 function openProduct(id, travel){
@@ -3534,7 +3521,7 @@ function openProduct(id, travel){
   var s=state.product;
   var sts=statesFor(s); var st=(sts.indexOf('fresh')>-1)?'fresh':(sts[0]||'fresh');
   var cuts=cutsForState(s,st);
-  state.cfg = { state:st, cut:(cuts[0]||'whole'), packs:2, sel:null };
+  state.cfg = { state:st, cut:(cuts[0]||'whole'), people:2, sel:null };
   el('p-title').textContent = s.name;
   loadUnits().then(function(){ if(state.screen==='product') renderProduct(); });
   renderProduct();
@@ -3569,7 +3556,7 @@ function renderProduct(){
   var cuts=cutsForState(s,c.state).filter(function(x){ return x!=='heads'; });
   var cutSeg=cuts.map(function(cut){ return '<button class="'+(c.cut===cut?'on':'')+'" onclick="setPCut(\''+cut+'\')">'+CUTLBL[cut]+'</button>'; }).join('');
   var pkg=priceForCut(s,c.state,c.cut);
-  var packSeg=[1,2,3,4,5,6,7,8].map(function(n){ return '<button class="'+(c.packs===n?'on':'')+'" onclick="setPacks('+n+')">'+n+'</button>'; }).join('');
+  var peopleSeg=[1,2,3,4,5,6,7,8].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
 
   var recs=recsFor(); var sel=c.sel || (recs[0]&&recs[0].key);
   var recHtml;
@@ -3593,7 +3580,8 @@ function renderProduct(){
       '<div class="cfg-block"><label>State</label><div class="seg">'+stateSeg+'</div></div>'+
       '<div class="cfg-block"><label>Cut</label><div class="seg">'+cutSeg+'</div>'+
         '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> Price <b style="margin-left:auto">'+(pkg!=null?money(pkg)+' / kg':'—')+'</b></div></div>'+
-      '<div class="cfg-block"><label>How many packs?</label><div class="seg">'+packSeg+'</div></div>'+
+      '<div class="cfg-block"><label>How many people?</label><div class="seg">'+peopleSeg+'</div>'+
+        '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> '+(c.cut==='whole'?('Whole fish \u00b7 ~'+CFG.gramsWhole+' g per person'):('Fillet / portions \u00b7 ~'+CFG.gramsPerPerson+' g per person'))+' \u2014 we pick the closest fish; change it below.</div></div>'+
       '<div class="cfg-block"><label>Available now</label>'+recHtml+'</div>'+
     '</div>'+
     '<div class="sticky-foot"><div class="price"><div class="lbl">Selected</div><div class="amt">'+money2(total)+'</div></div>'+
@@ -3601,7 +3589,7 @@ function renderProduct(){
 }
 function setPState(st){ var s=state.product; state.cfg.state=st; var cuts=cutsForState(s,st); if(cuts.indexOf(state.cfg.cut)<0) state.cfg.cut=cuts[0]||'whole'; state.cfg.sel=null; renderProduct(); }
 function setPCut(cut){ state.cfg.cut=cut; state.cfg.sel=null; renderProduct(); }
-function setPacks(n){ state.cfg.packs=n; state.cfg.sel=null; renderProduct(); }
+function setPeople(n){ state.cfg.people=n; state.cfg.sel=null; renderProduct(); }
 function setRec(k){ state.cfg.sel=k; renderProduct(); }
 
 /* ---------- BUTTON LOADING STATE ---------- */
@@ -3644,7 +3632,7 @@ function addToCart(){
         state:c.state, cut:cut,
         formId:s.id+'-'+c.state+'-'+cut,
         formLabel:(s.type==='bottle'?'Bottle':(CUTLBL[cut]+' ('+c.state+')')),
-        packs:rec.packs, uids:rec.uids, weight:rec.weight, grams:Math.round(rec.weight*1000),
+        people:rec.people, uids:rec.uids, weight:rec.weight, grams:Math.round(rec.weight*1000),
         price:rec.price, lineTotal:rec.price, exp:Date.now()+secs*1000, extended:false
       });
       state.cfg.sel=null; updateCartBadge();
@@ -3683,7 +3671,7 @@ function renderCart(){
     var dot = it.state==='fresh'?'<span class="tag fresh" style="padding:2px 7px;font-size:9px">Fresh</span>':'<span class="tag frozen" style="padding:2px 7px;font-size:9px">Frozen</span>';
     var thumb = it.photo ? '<img src="'+it.photo+'" alt="">' : svg(iconForId(it.speciesId),30,1.3);
     var isB = it.cut==='bottle';
-    var meta = isB ? 'Bottle' : (it.formLabel+' \u00b7 '+(it.packs+' pack'+(it.packs>1?'s':''))+' \u00b7 '+fmtKg(it.grams)+' '+dot);
+    var meta = isB ? 'Bottle' : (it.formLabel+' \u00b7 ~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)+' '+dot);
     return '<div class="cart-item">'+
       '<div class="ph">'+thumb+'</div>'+
       '<div class="info">'+
@@ -3863,7 +3851,7 @@ function renderPayment(){
     '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
     '<h3 style="font-size:16px; margin:18px 0 12px">Order summary</h3>'+
     '<div class="cart-summary" style="margin:0">'+
-      state.cart.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':(it.packs+' pack'+(it.packs>1?'s':'')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.lineTotal)+'</span></div>'; }).join('')+
+      state.cart.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.lineTotal)+'</span></div>'; }).join('')+
       '<div class="row" style="border-top:1px solid var(--line); margin-top:6px; padding-top:8px"><span class="k">Subtotal</span><span class="v">'+money2(sub)+'</span></div>'+
       '<div class="row"><span class="k">Delivery'+(doorCode?(' \u00b7 '+doorCode):'')+'</span><span class="v">'+(deliveryFee===0?'Free':money(deliveryFee))+'</span></div>'+
       '<div class="row tot"><span class="k">Total to pay</span><span class="v">'+money2(total)+'</span></div>'+
@@ -4277,9 +4265,9 @@ function renderTbFlight(){
   var tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
   el('tb-flight-host').innerHTML='<div class="pad">'+
     '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. Maximum net weight '+tbCap()+' kg.</p>'+
-    '<div class="field"><label>Collection shop</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
-    '<div class="field"><label>Collection date &amp; time</label><input id="tb-cdt" type="datetime-local" min="'+tomorrow+'T00:00" value="'+(t.collectionAt||'')+'" oninput="tbSyncFlightMin(this.value)"></div>'+
-    '<div class="field"><label>Flight date &amp; time</label><input id="tb-fdt" type="datetime-local" min="'+(t.collectionAt||(tomorrow+'T00:00'))+'" value="'+(t.flightAt||'')+'"></div>'+
+    '<div class="field"><label>Collection shop *</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
+    '<div class="field"><label>Collection date &amp; time *</label><input id="tb-cdt" type="datetime-local" min="'+tomorrow+'T00:00" value="'+(t.collectionAt||'')+'" oninput="tbSyncFlightMin(this.value)"></div>'+
+    '<div class="field"><label>Flight date &amp; time *</label><input id="tb-fdt" type="datetime-local" min="'+(t.collectionAt||(tomorrow+'T00:00'))+'" value="'+(t.flightAt||'')+'"></div>'+
     '<div class="field"><label>Destination (optional)</label>'+obSelectHTML('sel-dest', destOptions, t.destination||'', 'Select destination')+'</div>'+
     '<div class="field"><label>Airline (optional)</label>'+obSelectHTML('sel-air', airOptions, t.airline||'', 'Select airline')+'</div>'+
     '<div class="field"><label>Flight number (optional)</label><input id="tb-fno" placeholder="e.g. HM 708" value="'+(t.flightNo||'')+'"></div>'+
@@ -4295,19 +4283,20 @@ function tbSyncFlightMin(v){ var f=el('tb-fdt'); if(!f) return; f.min=v; if(f.va
 function tbValidateFlight(){
   var t=state.tb;
   t.collectionAt=el('tb-cdt').value; t.flightAt=el('tb-fdt').value; t.flightNo=el('tb-fno').value.trim();
+  var ex=el('tb-rej'); if(ex){ ex.remove(); }
   function tbReject(msg){
-    var pad=el('tb-flight-host').querySelector('.pad'); var ex=el('tb-rej'); if(ex){ ex.remove(); }
+    var pad=el('tb-flight-host').querySelector('.pad'); var p=el('tb-rej'); if(p){ p.remove(); }
     pad.insertAdjacentHTML('beforeend','<div class="tb-reject" id="tb-rej">'+msg+'</div>');
-    var r=el('tb-rej'); if(r){ r.scrollIntoView({behavior:'smooth'}); }
+    var r=el('tb-rej'); if(r){ r.scrollIntoView({behavior:'smooth',block:'center'}); }
   }
-  if(!t.shop){ toast('Please choose a collection shop'); return; }
-  if(!t.collectionAt){ toast('Please add a collection date & time'); return; }
-  if(!t.flightAt){ toast('Please add your flight date & time'); return; }
+  if(!t.shop){ tbReject('Please choose a collection shop above.'); return; }
+  if(!t.collectionAt){ tbReject('Please add a collection date &amp; time.'); return; }
+  if(!t.flightAt){ tbReject('Please add your flight date &amp; time.'); return; }
   var coll=new Date(t.collectionAt), fl=new Date(t.flightAt);
   var tomorrow=new Date(); tomorrow.setHours(0,0,0,0); tomorrow.setDate(tomorrow.getDate()+1);
-  if(coll < tomorrow){ tbReject('Travel boxes are prepared for next-day collection. Please choose a collection time from tomorrow onwards, or visit a shop directly.'); return; }
-  if(fl <= coll){ toast('Your flight must be after your collection time.'); return; }
-  if(fl - coll < 3600000){ toast('Please leave at least 1 hour between collection and your flight.'); return; }
+  if(coll < tomorrow){ tbReject('Travel boxes are prepared for next-day collection. Please choose a collection time from tomorrow onwards.'); return; }
+  if(fl <= coll){ tbReject('Your flight time must be after your collection time.'); return; }
+  if(fl - coll < 3600000){ tbReject('Please leave at least 1 hour between collection and your flight.'); return; }
   t.collectionDate=t.collectionAt.slice(0,10); t.collectionTime=t.collectionAt.slice(11,16);
   t.date=t.flightAt.slice(0,10); t.flightTime=t.flightAt.slice(11,16);
   state.tbMode=true; renderTbShop(); go('tb-shop');
@@ -4358,7 +4347,7 @@ function tbAddFromProduct(){
       var cut=(s.type==='bottle'?'bottle':c.cut);
       state.tb.items.push({ uid:'T'+Date.now()+Math.random().toString(36).slice(2,5), speciesId:s.id, name:s.name, photo:s.photo,
         state:c.state, cut:cut, formLabel:(s.type==='bottle'?'Bottle':(CUTLBL[cut]+' ('+c.state+')')),
-        packs:rec.packs, uids:rec.uids, weight:rec.weight, grams:Math.round(rec.weight*1000), price:rec.price, exp:Date.now()+secs*1000, extended:false });
+        people:rec.people, uids:rec.uids, weight:rec.weight, grams:Math.round(rec.weight*1000), price:rec.price, exp:Date.now()+secs*1000, extended:false });
       toast(s.name+' added to Travel Box');
       return loadUnits().then(function(){ go('tb-shop'); });
     })
@@ -4378,7 +4367,7 @@ function renderTbBox(){
   var w=tbWeight(), prev=tbBoxPreview(w), sub=tbSubtotal(), svc=tbServiceCharge(), cert=tbCertCharge();
   var perBox=CFG.servicePerBox!=null?CFG.servicePerBox:80;
   var lines = state.tb.items.map(function(it){
-    var lbl=it.cut==='bottle'?'Bottle':(it.packs+' pack'+(it.packs>1?'s':'')+' \u00b7 '+fmtKg(it.grams));
+    var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams));
     return '<div class="cart-item"><div class="ph">'+(it.photo?'<img src="'+it.photo+'" alt="">':svg(iconForId(it.speciesId),30,1.3))+'</div>'+
       '<div class="info"><h4>'+it.name+'</h4><div class="meta">'+lbl+'</div>'+
       '<div class="ln"><span class="lt">'+money2(it.price)+'</span><button class="rm" onclick="tbRemove(\''+it.uid+'\')">Remove</button></div></div></div>';
@@ -4420,7 +4409,7 @@ function renderTbCollect(){
     '<div class="field"><label>Phone (WhatsApp)</label><input id="tb-tphone" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
     '<h3 style="font-size:16px;margin:20px 0 12px">Order summary</h3>'+
     '<div class="cart-summary" style="margin:0">'+
-      t.items.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':(it.packs+' pack'+(it.packs>1?'s':'')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.price)+'</span></div>'; }).join('')+
+      t.items.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.price)+'</span></div>'; }).join('')+
       '<div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span class="k">Fish subtotal</span><span class="v">'+money2(sub)+'</span></div>'+
       '<div class="row"><span class="k">Service</span><span class="v">'+money2(svc)+'</span></div>'+
       '<div class="row"><span class="k">Certificate</span><span class="v">'+money2(cert)+'</span></div>'+
