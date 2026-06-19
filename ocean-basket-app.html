@@ -3246,8 +3246,8 @@ var CFG = {
   orderPrefix: 'OB',
   gramsPerPerson: 250,
   tolLow: 225, tolHigh: 275,
-  deliveryFee: 100,
-  freeFrom: 3000,
+  deliveryFee: 150,
+  freeFrom: 2000,
   upsellAt: 0.70
 };
 
@@ -3768,18 +3768,22 @@ function renderDelivery(){
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
   var ptName=pt?pt.name:'—';
   var host=el('delivery-host'); if(!host) return;
-  host.innerHTML='<div class="pad">'+
-    '<button class="opt'+(state.fulfil==='pickup'?' on':'')+'" onclick="setFulfil(\'pickup\')">'+
+  var dUpsell;
+  if(sub < CFG.freeFrom){ var dNeed=CFG.freeFrom-sub; var dPct=Math.min(100,Math.round(sub/CFG.freeFrom*100)); dUpsell='<div class="upsell"><h4>Add '+money(dNeed)+' for free delivery</h4><div class="bar"><i style="width:'+dPct+'%"></i></div><p>Spend '+money(CFG.freeFrom)+' or more and door-to-door delivery is free.</p></div>'; }
+  else { dUpsell='<div class="free-note" style="margin-bottom:14px">'+svg('check',14,1.8)+' Your order qualifies for free door-to-door delivery</div>'; }
+  host.innerHTML='<div class="pad">'+ dUpsell +
+    '<button class="opt'+(state.fulfil==='pickup'?' on':'')+'" onclick="pickDrop()">'+
       '<span class="radio"></span><div class="oc"><div class="ot"><h4>Collect from a point</h4><span class="fee free">FREE</span></div>'+
-      '<p>Pick up at any of our 10 Mahé points. '+(pt?('Selected: <b>'+pt.id+' '+ptName+'</b>'):'Choose a point below.')+'</p></div></button>'+
-    '<button class="opt'+(state.fulfil==='delivery'?' on':'')+'" onclick="setFulfil(\'delivery\')">'+
+      '<p>Pick up at any of our 10 Mahé points. '+(pt?('Selected: <b>'+pt.id+' '+ptName+'</b> — tap to change.'):'Tap to choose your point on the map.')+'</p></div></button>'+
+    '<button class="opt'+(state.fulfil==='delivery'?' on':'')+'" onclick="pickDoor()">'+
       '<span class="radio"></span><div class="oc"><div class="ot"><h4>Door-to-door delivery</h4><span class="fee'+(deliveryFee===0?' free':'')+'">'+(deliveryFee===0?'FREE \u00b7 GOLD':money(deliveryFee)+' \u00b7 SILVER')+'</span></div>'+
       '<p>We deliver to your address on Mahé. Free (GOLD) from '+money(CFG.freeFrom)+', otherwise '+money(CFG.deliveryFee)+' (SILVER).</p></div></button>'+
-    (state.fulfil==='pickup' ? '<button class="btn ghost" style="margin-top:6px" onclick="go(\'map\')">'+(pt?('Change point ('+pt.id+' '+ptName+')'):'Choose collection point')+'</button>' : '')+
-    '<div style="margin-top:18px"><button class="btn" '+((state.fulfil==='pickup'&&!pt)?'disabled':'')+' onclick="go(\'payment\')">Continue to review \u2192</button></div>'+
   '</div>';
 }
 function setFulfil(f){ state.fulfil=f; renderDelivery(); }
+function pickDrop(){ state.fulfil='pickup'; go('map'); }
+function pickDoor(){ state.fulfil='delivery'; state.point=null; go('payment'); }
+function confirmPoint(){ if(!state.point){ toast('Tap a point to select it'); return; } go('payment'); }
 
 /* ---------- MAP / collection points (v2 — all 10 points) ---------- */
 var _map=null, _markers={};
@@ -3799,7 +3803,7 @@ function renderMap(){
         '<span class="pc"><h4>'+p.name+'</h4><p>'+p.id+' \u00b7 '+(p.colorName||'')+' label \u00b7 '+(p.zone||'')+'</p></span>'+
         '<span class="chk">'+svg('check',18,1.6)+'</span></button>';
     }).join('')+
-    '<button class="btn" style="margin-top:8px" onclick="go(\'delivery\')">Confirm point</button>'+
+    '<button class="btn" style="margin-top:8px" onclick="confirmPoint()">Confirm point</button>'+
   '</div>';
   setTimeout(initLeaflet, 60);
 }
