@@ -3235,6 +3235,14 @@ function loadCatalog(){
       if(Array.isArray(d.shops) && d.shops.length){
         SHOPS = d.shops.map(function(sh){ return { id:sh.id, name:sh.name, phone:sh.phone, dist:'', stock:'In stock' }; });
       }
+      // stan w 4 sklepach (ob_shop_stock) -> SHOP_STOCK[product_id][shop_id] = {fresh_kg, frozen_kg}
+      SHOP_STOCK = {};
+      if(Array.isArray(d.shopStock)){
+        d.shopStock.forEach(function(r){
+          if(!SHOP_STOCK[r.product_id]) SHOP_STOCK[r.product_id]={};
+          SHOP_STOCK[r.product_id][r.shop_id]={ fresh_kg:Number(r.fresh_kg)||0, frozen_kg:Number(r.frozen_kg)||0 };
+        });
+      }
       window.__BOOT = d;
       return true;
     });
@@ -3314,6 +3322,7 @@ var SHOPS = [
   {name:'Anse Royale', dist:'10.3 km', stock:'In stock', phone:'+248 4 247 004'},
   {name:'Takamaka', dist:'13.8 km', stock:'Low stock', phone:'+248 4 247 005'}
 ];
+var SHOP_STOCK = {};  /* product_id -> shop_id -> {fresh_kg, frozen_kg}; filled from /bootstrap shopStock */
 
 /* ---------- STATE ---------- */
 var state = {
@@ -3337,6 +3346,27 @@ var state = {
 function money(n){ return CFG.currency + ' ' + Number(n).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:0}); }
 function money2(n){ return CFG.currency + ' ' + Number(n).toFixed(2); }
 function speciesById(id){ return CATALOG.find(function(s){return s.id===id}); }
+function shopStockBlock(pid){
+  var ps = SHOP_STOCK[pid] || {};
+  var list = SHOPS;
+  var travelOne = !!(state.tbMode && state.tb && state.tb.shop);
+  if(travelOne){ list = SHOPS.filter(function(sh){ return sh.id===state.tb.shop; }); }
+  function q(k){ return k>0?((k%1?k.toFixed(1):k)+' kg'):'\u2014'; }
+  var any=false;
+  var cards = list.map(function(sh){
+    var rec=ps[sh.id]||{}; var f=rec.fresh_kg||0, z=rec.frozen_kg||0; if(f>0||z>0) any=true;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px'+((f>0||z>0)?'':';opacity:.5')+'">'+
+      '<span style="font-weight:600">'+sh.name+'</span>'+
+      '<span style="display:flex;gap:14px;font-size:13px;white-space:nowrap">'+
+        '<span>Fresh <b style="color:'+(f>0?'var(--ink)':'var(--mut)')+'">'+q(f)+'</b></span>'+
+        '<span>Frozen <b style="color:'+(z>0?'var(--ink)':'var(--mut)')+'">'+q(z)+'</b></span>'+
+      '</span></div>';
+  }).join('');
+  var label = travelOne ? 'At your collection shop' : 'Also at our shops';
+  return '<div class="cfg-block"><label>'+label+'</label>'+
+    '<p class="muted" style="font-size:12.5px;margin:-2px 0 8px">Current stock at our shops \u2014 buy in person if you need it now'+(any?'':' \u2014 none recorded right now')+'. By weight (fresh / frozen); shops cut to order.</p>'+
+    cards+'</div>';
+}
 function fmtKg(g){ return (g/1000).toFixed(g%1000===0?0:2)+' kg'; }
 function el(id){ return document.getElementById(id); }
 
@@ -3583,6 +3613,7 @@ function renderProduct(){
       '<div class="cfg-block"><label>How many people?</label><div class="seg">'+peopleSeg+'</div>'+
         '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> '+(c.cut==='whole'?('Whole fish \u00b7 ~'+CFG.gramsWhole+' g per person'):('Fillet / portions \u00b7 ~'+CFG.gramsPerPerson+' g per person'))+' \u2014 we pick the closest fish; change it below.</div></div>'+
       '<div class="cfg-block"><label>Available now</label>'+recHtml+'</div>'+
+      shopStockBlock(s.id)+
     '</div>'+
     '<div class="sticky-foot"><div class="price"><div class="lbl">Selected</div><div class="amt">'+money2(total)+'</div></div>'+
       (chosen ? '<button class="btn gilt" onclick="addToCart()">'+(state.tbMode?'Add to Travel Box':'Add to Basket')+'</button>' : '<button class="btn gilt" disabled>Pick an option</button>')+'</div>';
@@ -4081,9 +4112,11 @@ function openSoldOut(id){
     '<div class="pad" style="padding-top:0">'+
       '<h3 style="font-size:15px; margin:6px 0 12px">Available at shops</h3>'+
       SHOPS.map(function(sh){
-        var col=sh.stock==='In stock'?'var(--ok)':'var(--gilt)';
+        var rec=(SHOP_STOCK[s.id]||{})[sh.id]; var kg=rec?(rec.fresh_kg+rec.frozen_kg):0; var has=kg>0;
+        var lbl=has?((kg%1?kg.toFixed(1):kg)+' kg in stock'):'Call to check';
+        var col=has?'var(--ok)':'var(--gilt)';
         return '<div class="point" style="cursor:default">'+
-          '<span class="pc"><h4>'+sh.name+'</h4><p>'+sh.dist+' · <b style="color:'+col+'">'+sh.stock+'</b></p></span>'+
+          '<span class="pc"><h4>'+sh.name+'</h4><p><b style="color:'+col+'">'+lbl+'</b></p></span>'+
           '<button class="btn sm ghost" onclick="toast(\'Calling '+sh.name+'\')">'+svg('phone',15,1.4)+' Call</button></div>';
       }).join('')+
       '<h3 style="font-size:15px; margin:18px 0 12px">Or try these instead</h3>'+
