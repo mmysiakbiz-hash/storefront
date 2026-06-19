@@ -411,15 +411,18 @@ function doScan(){
 /* ================= 3. ONLINE RESERVE INVENTORY ================= */
 function renderInventory(){
   var f=state.invFilter;
-  var counts={all:state.units.length,available:0,held:0,sold:0,packed:0};
+  var counts={all:state.units.length,available:0,held:0,sold:0,packed:0,removed:0};
   state.units.forEach(function(u){ if(counts[u.status]!=null) counts[u.status]++; });
-  var filters=['all','available','held','sold','packed'].map(function(k){ return '<button class="statpill" style="'+(f===k?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="state.invFilter=\''+k+'\';renderInventory()">'+k+' ('+(counts[k]||0)+')</button>'; }).join(' ');
+  var filters=['all','available','held','sold','packed','removed'].map(function(k){ return '<button class="statpill" style="'+(f===k?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="state.invFilter=\''+k+'\';renderInventory()">'+k+' ('+(counts[k]||0)+')</button>'; }).join(' ');
   var list=state.units.filter(function(u){return f==='all'||u.status===f;}).slice(0,300);
   var rows=list.map(function(u){
-    var sc={available:'fresh',held:'frozen',sold:'off',packed:'off'}[u.status]||'off';
+    var sc={available:'fresh',held:'frozen',sold:'off',packed:'off',removed:'off'}[u.status]||'off';
+    var act = u.status==='available' ? '<button class="btn ghost sm" onclick="retireUnit(\''+u.uid+'\')">Remove</button>'
+            : u.status==='removed'   ? '<button class="btn ghost sm" onclick="restoreUnit(\''+u.uid+'\')">Restore</button>'
+            : '';
     return '<div class="stock-row"><div class="si"><div class="sn">'+u.uid+' · '+pname(u.product_id)+'</div>'+
-      '<div class="kgunit">'+u.state+' · '+CUT(u.cut)+' · '+Number(u.weight_kg).toFixed(2)+' kg · '+u.packs+' pack'+(u.packs>1?'s':'')+(u.sku?(' · '+u.sku):'')+(u.batch?(' · '+u.batch):'')+'</div></div>'+
-      '<span class="badge '+sc+'">'+u.status+'</span><span class="kgunit">'+money(u.total)+'</span></div>';
+      '<div class="kgunit">'+u.state+' · '+CUT(u.cut)+' · '+Number(u.weight_kg).toFixed(2)+' kg · '+u.packs+' pack'+(u.packs>1?'s':'')+(u.sku?(' · '+u.sku):'')+(u.batch?(' · '+u.batch):'')+(u.use_by?(' · use by '+u.use_by):'')+'</div></div>'+
+      '<span class="badge '+sc+'">'+u.status+'</span><span class="kgunit">'+money(u.total)+'</span>'+act+'</div>';
   }).join('');
   el('p-inventory').innerHTML='<div class="section-head"><h2>Online Reserve Inventory</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadUnits().then(renderInventory);})">Refresh</button></div>'+
     '<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+filters+'</div>'+(rows||'<div class="empty"><h3>No stock units</h3><p>Scan fish in to populate the online reserve.</p></div>')+'</div>';
@@ -445,6 +448,8 @@ function renderOrders(){
 }
 function setStatus(id,status){ sb.from('ob_orders').update({status:status}).eq('id',id).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Status → '+status); loadOrders(); }); }
 function markPacked(id){ sb.rpc('ob_mark_packed',{p_order:id}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Marked packed: '+id); loadOrders({render:true}); loadUnits(); }); }
+function retireUnit(uid){ if(!confirm('Remove '+uid+' from the online reserve? It will no longer be sold online.')) return; sb.rpc('ob_retire_unit',{p_store:STORE_ID,p_uid:uid}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Removed from online: '+uid); loadUnits().then(function(){ renderInventory(); renderDashboard(); }); }); }
+function restoreUnit(uid){ sb.rpc('ob_restore_unit',{p_store:STORE_ID,p_uid:uid}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Restored to online: '+uid); loadUnits().then(function(){ renderInventory(); renderDashboard(); }); }); }
 
 /* ================= 5. PICK LISTS & STICKERS (next build) ================= */
 function dropById(id){ return state.drops.filter(function(d){return d.id===id;})[0]; }
