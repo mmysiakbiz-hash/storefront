@@ -46,6 +46,7 @@ a{color:var(--ink)}
 .topbar h1{color:#fff;font-size:20px;flex:1}
 .topbar .who{font-size:12.5px;opacity:.7}
 .topbar .out{font-size:13px;color:#fff;opacity:.85;text-decoration:underline}
+.topbar .ver{font-size:11px;opacity:.6;background:rgba(255,255,255,.14);padding:3px 9px;border-radius:11px;white-space:nowrap}
 .tabs{background:#fff;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:0 4px;padding:0 16px;position:sticky;top:56px;z-index:40}
 .tabs button{padding:15px 18px;font-size:14px;font-weight:600;color:var(--mut);border-bottom:2px solid transparent;white-space:nowrap}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--gilt)}
@@ -188,6 +189,7 @@ a{color:var(--ink)}
 <div class="shell" id="shell">
   <div class="topbar">
     <h1>Ocean Basket Admin</h1>
+    <span class="ver">build 2026-06-18 · users</span>
     <span class="who" id="who"></span>
     <button class="out" onclick="signOut()">Sign out</button>
   </div>
@@ -425,6 +427,7 @@ function renderInventory(){
 
 /* ================= 4. ORDER MONITOR ================= */
 var STATUSES=['pending_payment','paid','certificate_pending','preparing','packed','out_for_delivery','ready','collected','completed','cancelled'];
+function fmtWhen(ts){ if(!ts) return ''; try{ return new Date(ts).toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function renderOrders(){
   var rows=state.orders.map(function(o){
     var where;
@@ -433,7 +436,7 @@ function renderOrders(){
     else { where='Collect'+(o.drop_point_id?(' · '+o.drop_point_id):''); }
     var opts=STATUSES.map(function(st){ return '<option value="'+st+'"'+(o.status===st?' selected':'')+'>'+st+'</option>'; }).join('');
     return '<div class="order-row"><div class="oinfo"><div class="ono">'+o.id+'</div>'+
-      '<div class="ometa">'+(o.customer_name||'—')+' · '+money(o.total)+' · '+where+'</div></div>'+
+      '<div class="ometa">'+(o.customer_name||'—')+' · '+money(o.total)+' · '+where+'</div>'+'<div class="ometa" style="opacity:.7">'+fmtWhen(o.created_at)+'</div></div>'+
       '<button class="btn ghost sm" onclick="markPacked(\''+o.id+'\')">Packed</button>'+
       '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select></div>';
   }).join('');

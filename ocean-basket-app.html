@@ -3923,8 +3923,7 @@ function qrSvg(t){ try{ var q=window.qrcode(0,'M'); q.addData(String(t)); q.make
 function _tkRound(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function _tkWrap(ctx,text,cx,y,maxW,lh){ var w=String(text).split(' '),line='',yy=y,i,t2; for(i=0;i<w.length;i++){ t2=line?line+' '+w[i]:w[i]; if(ctx.measureText(t2).width>maxW && line){ ctx.fillText(line,cx,yy); line=w[i]; yy+=lh; } else { line=t2; } } if(line) ctx.fillText(line,cx,yy); return yy; }
 function _tkQR(ctx,text,x,y,size){ try{ var q=window.qrcode(0,'M'); q.addData(String(text)); q.make(); var n=q.getModuleCount(), cell=size/n, r,c; ctx.fillStyle='#0a1140'; for(r=0;r<n;r++){ for(c=0;c<n;c++){ if(q.isDark(r,c)) ctx.fillRect(Math.floor(x+c*cell),Math.floor(y+r*cell),Math.ceil(cell),Math.ceil(cell)); } } }catch(e){} }
-function saveConfirmation(){
-  var t=state.lastTicket; if(!t){ toast('Nothing to save yet'); return; }
+function _tkBuildCanvas(t){
   var W=720,H=820,sc=2;
   var cv=document.createElement('canvas'); cv.width=W*sc; cv.height=H*sc; var ctx=cv.getContext('2d'); ctx.scale(sc,sc);
   ctx.fillStyle='#faf7f0'; ctx.fillRect(0,0,W,H);
@@ -3940,14 +3939,40 @@ function saveConfirmation(){
   var ly=y+120+qs+66; ctx.fillStyle='#2c2c2c'; ctx.font='17px Arial';
   (t.lines||[]).forEach(function(l){ if(l){ _tkWrap(ctx,l,W/2,ly,w-50,24); ly+=30; } });
   ctx.fillStyle='#8a8a8a'; ctx.font='13px Arial'; _tkWrap(ctx,t.note||'',W/2,ly+12,w-50,19);
-  cv.toBlob(function(blob){
-    if(!blob){ toast('Could not create image'); return; }
-    var fname='ocean-basket-'+t.no+'.png';
-    try{ var file=new File([blob],fname,{type:'image/png'});
-      if(navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file], title:'Ocean Basket '+t.no}).catch(function(){}); return; }
+  return cv;
+}
+function _tkToBlob(durl){
+  var p=durl.split(','), mime=(p[0].match(/:(.*?);/)||[])[1]||'image/png', bin=atob(p[1]), n=bin.length, u8=new Uint8Array(n);
+  while(n--){ u8[n]=bin.charCodeAt(n); }
+  return new Blob([u8],{type:mime});
+}
+function saveConfirmation(){
+  var t=state.lastTicket; if(!t){ toast('Nothing to save yet'); return; }
+  var url;
+  try{ url=_tkBuildCanvas(t).toDataURL('image/png'); }catch(e){ toast('Could not create image'); return; }
+  var fname='ocean-basket-'+t.no+'.png';
+  var ov=document.createElement('div');
+  ov.setAttribute('style','position:fixed;inset:0;z-index:99999;background:rgba(10,17,64,.9);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:auto;padding:18px;');
+  ov.innerHTML=
+    '<img src="'+url+'" alt="Order '+t.no+'" style="width:100%;max-width:340px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);margin-top:6px"/>'+
+    '<div style="color:#fff;opacity:.85;font-size:13px;text-align:center;margin:12px 0 14px;max-width:340px;line-height:1.45">Press and hold the image to save it to your photos \u2013 or use the buttons below.</div>'+
+    '<div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:340px">'+
+      '<a href="'+url+'" download="'+fname+'" class="btn gilt" style="text-align:center;text-decoration:none">Download image</a>'+
+      (navigator.share?'<button class="btn" id="tk-share">Share</button>':'')+
+      '<button class="btn ghost" id="tk-close">Close</button>'+
+    '</div>';
+  document.body.appendChild(ov);
+  var close=function(){ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector('#tk-close').onclick=close;
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  var shareBtn=ov.querySelector('#tk-share');
+  if(shareBtn){ shareBtn.onclick=function(){
+    try{
+      var file=new File([_tkToBlob(url)],fname,{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Ocean Basket '+t.no}).catch(function(){}); }
+      else { navigator.share({title:'Ocean Basket '+t.no,text:'Order '+t.no}).catch(function(){}); }
     }catch(e){}
-    var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); },3000);
-  },'image/png');
+  }; }
 }
 function renderSuccess(order){
   var pt=POINTS.filter(function(p){return p.n===order.point;})[0];
