@@ -3420,13 +3420,19 @@ function obSelectToggle(id){
   var isOpen=menu.classList.contains('open');
   obSelectCloseAll();
   if(!isOpen){
+    var r=btn.getBoundingClientRect();
+    menu.style.position='fixed'; menu.style.right='auto';
+    menu.style.left=r.left+'px'; menu.style.width=r.width+'px';
     menu.classList.add('open'); btn.classList.add('open'); _obselOpen=id;
+    var mh=menu.offsetHeight, below=window.innerHeight-r.bottom;
+    if(below < mh+12 && r.top > below){ menu.style.top=Math.max(8, r.top-mh-6)+'px'; }
+    else { menu.style.top=(r.bottom+6)+'px'; }
     var bd=document.createElement('div'); bd.className='obsel-backdrop'; bd.id='obsel-bd';
     bd.onclick=obSelectCloseAll; document.body.appendChild(bd);
   }
 }
 function obSelectCloseAll(){
-  document.querySelectorAll('.obsel-menu.open').forEach(function(m){ m.classList.remove('open'); });
+  document.querySelectorAll('.obsel-menu.open').forEach(function(m){ m.classList.remove('open'); m.style.position=''; m.style.left=''; m.style.right=''; m.style.top=''; m.style.bottom=''; m.style.width=''; });
   document.querySelectorAll('.obsel-btn.open').forEach(function(b){ b.classList.remove('open'); });
   var bd=document.getElementById('obsel-bd'); if(bd) bd.remove();
   _obselOpen=null;
@@ -3835,20 +3841,20 @@ function renderPayment(){
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
 
   var addressFields = state.fulfil==='delivery'
-    ? '<div class="field"><label>Delivery address</label><textarea id="f-address" rows="2" placeholder="House, road, district — Mahé">'+(c.address||'')+'</textarea></div>'
+    ? '<div class="field"><label>Delivery address</label><textarea id="f-address" rows="2" oninput="state.customer.address=this.value" placeholder="House, road, district — Mahé">'+(c.address||'')+'</textarea></div>'
     : '<div class="info-banner" style="margin-bottom:14px">Collecting from <b style="margin:0 4px">'+(pt?(pt.id+' \u00b7 '+pt.name):'—')+'</b>'+(pt?(' ('+pt.colorName+' label)'):'')+'</div>';
 
   var methods=[['card','Card','Visa / Mastercard'],['moka','MOKA','Mobile wallet'],['airtel','Airtel Money','Mobile wallet'],['cash','Cash on Collection','Pay at point / door']];
   var methodHtml=methods.map(function(m){
-    return '<button class="opt'+(state.payMethod===m[0]?' on':'')+'" onclick="setPay(\''+m[0]+'\')">'+
+    return '<button class="opt'+(state.payMethod===m[0]?' on':'')+'" data-pay="'+m[0]+'" onclick="setPay(\''+m[0]+'\')">'+
       '<span class="radio"></span><div class="oc"><div class="ot"><h4>'+m[1]+'</h4></div><p>'+m[2]+'</p></div></button>';
   }).join('');
 
   el('payment-host').innerHTML='<div class="pad">'+
     '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+
-    '<div class="field"><label>Full name</label><input id="f-name" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
-    '<div class="field"><label>Phone (WhatsApp)</label><input id="f-phone" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
-    '<div class="field"><label>Email (optional)</label><input id="f-email" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+
+    '<div class="field"><label>Full name</label><input id="f-name" oninput="state.customer.name=this.value" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
+    '<div class="field"><label>Phone (WhatsApp)</label><input id="f-phone" oninput="state.customer.phone=this.value" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
+    '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+
     addressFields+
     '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
     '<h3 style="font-size:16px; margin:18px 0 12px">Order summary</h3>'+
@@ -3858,11 +3864,15 @@ function renderPayment(){
       '<div class="row"><span class="k">Delivery'+(doorCode?(' \u00b7 '+doorCode):'')+'</span><span class="v">'+(deliveryFee===0?'Free':money(deliveryFee))+'</span></div>'+
       '<div class="row tot"><span class="k">Total to pay</span><span class="v">'+money2(total)+'</span></div>'+
     '</div>'+
-    '<div class="info-banner" style="margin-top:14px">Card / MOKA / Airtel checkout connects with the payment provider in production. For now the order is placed and confirmed by WhatsApp.</div>'+
+    '<div class="info-banner" style="margin-top:14px">Card / MOKA / Airtel checkout connects with the payment provider in production. For now the order is placed and you can save your confirmation on the next screen.</div>'+
     '<div style="margin-top:16px"><button class="btn gilt" id="payBtn" onclick="placeOrder()">\ud83d\udd12 Place order \u00b7 '+money2(total)+'</button></div>'+
   '</div>';
 }
-function setPay(m){ state.payMethod=m; renderPayment(); }
+function setPay(m){
+  state.payMethod=m;
+  var host=el('payment-host'); if(!host){ renderPayment(); return; }
+  [].forEach.call(host.querySelectorAll('.opt[data-pay]'), function(btn){ btn.classList.toggle('on', btn.getAttribute('data-pay')===m); });
+}
 function placeOrder(){
   var name=el('f-name').value.trim();
   var phone=el('f-phone').value.trim();
