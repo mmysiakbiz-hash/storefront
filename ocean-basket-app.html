@@ -3581,7 +3581,7 @@ function renderProduct(){
 
   var states=statesFor(s);
   var stateSeg=states.map(function(st){ return '<button class="'+(c.state===st?'on':'')+'" onclick="setPState(\''+st+'\')">'+(st==='fresh'?'\u25cf Fresh':'\u25cf Frozen')+'</button>'; }).join('');
-  var cuts=cutsForState(s,c.state).filter(function(x){ return x!=='heads'; });
+  var cuts=cutsForState(s,c.state).filter(function(x){ return x!=='heads' && x!=='portions'; });
   var cutSeg=cuts.map(function(cut){ return '<button class="'+(c.cut===cut?'on':'')+'" onclick="setPCut(\''+cut+'\')">'+CUTLBL[cut]+'</button>'; }).join('');
   var pkg=priceForCut(s,c.state,c.cut);
   var peopleSeg=[1,2,3,4,5,6,7,8].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
@@ -3609,7 +3609,7 @@ function renderProduct(){
       '<div class="cfg-block"><label>Cut</label><div class="seg">'+cutSeg+'</div>'+
         '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> Price <b style="margin-left:auto">'+(pkg!=null?money(pkg)+' / kg':'—')+'</b></div></div>'+
       '<div class="cfg-block"><label>How many people?</label><div class="seg">'+peopleSeg+'</div>'+
-        '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> '+(c.cut==='whole'?('Whole fish \u00b7 ~'+CFG.gramsWhole+' g per person'):('Fillet / portions \u00b7 ~'+CFG.gramsPerPerson+' g per person'))+' \u2014 we pick the closest fish; change it below.</div></div>'+
+        '<div class="range-pill"><span class="ic">'+svg('check',15,1.6)+'</span> '+(c.cut==='whole'?('Whole fish \u00b7 ~'+CFG.gramsWhole+' g per person'):('Fillet \u00b7 ~'+CFG.gramsPerPerson+' g per person'))+' \u2014 we pick the closest fish; change it below.</div></div>'+
       '<div class="cfg-block"><label>Available now</label>'+recHtml+'</div>'+
       shopStockBlock(s.id)+
     '</div>'+

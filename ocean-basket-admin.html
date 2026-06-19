@@ -361,7 +361,7 @@ function renderScan(){
 function scanCuts(){
   var pid=el('sc-prod').value; var cuts={};
   state.variants.filter(function(v){return v.product_id===pid;}).forEach(function(v){ cuts[v.cut]=true; });
-  el('sc-cut').innerHTML=['whole','fillet','portions','heads','bottle'].filter(function(c){return cuts[c];}).map(function(c){return '<option value="'+c+'">'+CUT(c)+'</option>';}).join('');
+  el('sc-cut').innerHTML=['whole','fillet','heads','bottle'].filter(function(c){return cuts[c];}).map(function(c){return '<option value="'+c+'">'+CUT(c)+'</option>';}).join('');
   scanPrice();
 }
 function scanPrice(){
