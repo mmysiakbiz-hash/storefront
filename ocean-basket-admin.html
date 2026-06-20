@@ -545,18 +545,20 @@ function renderShops(){
   var shopOpts=_allowShops.map(function(sh){ return '<option value="'+sh.id+'">'+sh.name+'</option>'; }).join('');
   var prodOpts=state.products.map(function(p){ return '<option value="'+p.id+'">'+p.name+' ('+(p.code||'')+')</option>'; }).join('');
   var editor=(can('can_edit_stock') && _allowShops.length)?('<div class="card"><h3 style="font-size:18px;margin-bottom:10px">Update stock</h3>'+
-    '<p class="muted" style="font-size:13px;margin-bottom:14px">Three ways to pick a fish: scan/type a barcode, scan with the camera, or choose it from the list \u2014 then set fresh / frozen kg for the chosen shop.</p>'+
+    '<p class="muted" style="font-size:13px;margin-bottom:14px">Three ways to pick a fish: scan/type a barcode, scan with the camera, or choose it from the list \u2014 then set kg per cut (whole / fillet) for the chosen shop.</p>'+
     '<div class="field"><label>Shop</label><select id="ss-shop" onchange="ssPrefill()">'+shopOpts+'</select></div>'+
     '<div class="field"><label>Scan / type barcode</label><input id="ss-barcode" autocomplete="off" placeholder="scan or type a code, then Enter" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ssResolve();}"><div class="muted" style="font-size:12px;margin-top:5px">A USB/Bluetooth scanner types the code then Enter. On a phone, use the camera button.</div></div>'+
     '<button class="btn ghost sm" style="width:auto;margin-bottom:14px" onclick="ssCameraScan()">\ud83d\udcf7 Scan with camera</button>'+
     '<div class="field"><label>Product</label><select id="ss-prod" onchange="ssPrefill()">'+prodOpts+'</select></div>'+
-    '<div class="grid2">'+
-      '<div class="field"><label>Fresh (kg)</label><input id="ss-fresh" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
-      '<div class="field"><label>Frozen (kg)</label><input id="ss-frozen" type="number" step="0.1" min="0" placeholder="0.0"></div>'+
-    '</div>'+
+    '<div id="ss-cuts"></div>'+
     '<button class="btn gilt" onclick="ssSave()">Save stock</button></div>'):'';
   var cards=state.shops.map(function(sh){
-    var rows=state.shopStock.filter(function(s){return s.shop_id===sh.id;}).map(function(s){ return '<div class="rep-row"><span>'+pname(s.product_id)+'</span><span class="rep-v">'+Number(s.fresh_kg||0).toFixed(1)+' kg fresh · '+Number(s.frozen_kg||0).toFixed(1)+' kg frozen</span></div>'; }).join('')||'<div class="muted" style="font-size:13px">No stock recorded.</div>';
+    var srows=state.shopStock.filter(function(s){return s.shop_id===sh.id && Number(s.kg||0)>0;});
+    var byProd={}; srows.forEach(function(s){ (byProd[s.product_id]=byProd[s.product_id]||[]).push(s); });
+    var rows=Object.keys(byProd).map(function(pid){
+      var parts=byProd[pid].slice().sort(function(a,b){return ssOrd(a)-ssOrd(b);}).map(function(s){ return ssCap(s.state)+' '+ssCap(s.cut)+' '+Number(s.kg).toFixed(1)+' kg'; }).join(' \u00b7 ');
+      return '<div class="rep-row"><span>'+pname(pid)+'</span><span class="rep-v">'+parts+'</span></div>';
+    }).join('')||'<div class="muted" style="font-size:13px">No stock recorded.</div>';
     return '<div class="card"><h3 style="font-size:18px;margin-bottom:8px">'+sh.name+'</h3>'+rows+'</div>';
   }).join('');
   el('p-shops').innerHTML='<div class="section-head"><h2>4-Shop Live Stock</h2></div>'+editor+(cards||'<div class="empty"><h3>No shops</h3></div>');
@@ -570,22 +572,40 @@ function ssResolve(){
   var pid=null;
   for(var i=0;i<skus.length;i++){ if(up===skus[i]||up.indexOf(skus[i])===0){ pid=m[skus[i]].product; break; } }
   if(!pid){ var p=(state.products||[]).filter(function(x){ return x.code && (up===String(x.code).toUpperCase()||up.indexOf(String(x.code).toUpperCase())===0); })[0]; if(p) pid=p.id; }
-  if(pid){ el('ss-prod').value=pid; ssPrefill(); toast('Barcode \u2192 '+pname(pid)); var f=el('ss-fresh'); if(f){ f.focus(); } }
+  if(pid){ el('ss-prod').value=pid; ssPrefill(); toast('Barcode \u2192 '+pname(pid)); var f=el('ss-cuts')?el('ss-cuts').querySelector('input'):null; if(f){ f.focus(); } }
   else { toast('Unknown barcode \u2014 pick the product manually'); }
 }
+function ssCap(x){ return x?(''+x).charAt(0).toUpperCase()+(''+x).slice(1):x; }
+function ssOrd(s){ var o={'fresh-whole':1,'fresh-fillet':2,'frozen-whole':3,'frozen-fillet':4,'fresh-bottle':5,'frozen-bottle':6}; return o[(s.state)+'-'+(s.cut)]||9; }
+function ssCombos(pid){
+  var vs=(state.variants||[]).filter(function(v){ return v.product_id===pid && v.active!==false && ['whole','fillet','bottle'].indexOf(v.cut)>=0; });
+  return vs.map(function(v){ return {state:v.state, cut:v.cut}; }).sort(function(a,b){ return ssOrd(a)-ssOrd(b); });
+}
 function ssPrefill(){
-  var shopEl=el('ss-shop'), prodEl=el('ss-prod'); if(!shopEl||!prodEl){ return; }
+  var shopEl=el('ss-shop'), prodEl=el('ss-prod'), host=el('ss-cuts'); if(!shopEl||!prodEl||!host){ return; }
   var shop=shopEl.value, pid=prodEl.value;
-  var row=(state.shopStock||[]).filter(function(s){return s.shop_id===shop&&s.product_id===pid;})[0];
-  if(el('ss-fresh')){ el('ss-fresh').value=row?Number(row.fresh_kg||0):''; }
-  if(el('ss-frozen')){ el('ss-frozen').value=row?Number(row.frozen_kg||0):''; }
+  var combos=ssCombos(pid);
+  if(!combos.length){ host.innerHTML='<p class="muted" style="font-size:13px;margin-bottom:14px">No sellable cuts for this product.</p>'; return; }
+  host.innerHTML='<div class="grid2">'+combos.map(function(c){
+    var row=(state.shopStock||[]).filter(function(s){return s.shop_id===shop&&s.product_id===pid&&s.state===c.state&&s.cut===c.cut;})[0];
+    var val=row?Number(row.kg||0):'';
+    return '<div class="field"><label>'+ssCap(c.state)+' '+ssCap(c.cut)+' (kg)</label><input id="ss-kg-'+c.state+'-'+c.cut+'" type="number" step="0.1" min="0" placeholder="0.0" value="'+(val===''?'':val)+'"></div>';
+  }).join('')+'</div>';
 }
 function ssSave(){
   var shop=el('ss-shop').value, pid=el('ss-prod').value;
-  var fresh=parseFloat(el('ss-fresh').value)||0, frozen=parseFloat(el('ss-frozen').value)||0;
   if(!shop||!pid){ toast('Pick a shop and a product'); return; }
-  if(fresh<0||frozen<0){ toast('Stock cannot be negative'); return; }
-  sb.from('ob_shop_stock').upsert({ shop_id:shop, product_id:pid, fresh_kg:fresh, frozen_kg:frozen, updated_at:new Date().toISOString() }, { onConflict:'shop_id,product_id' })
+  var combos=ssCombos(pid);
+  if(!combos.length){ toast('No sellable cuts for this product'); return; }
+  var rows=[], bad=false, now=new Date().toISOString();
+  combos.forEach(function(c){
+    var inp=el('ss-kg-'+c.state+'-'+c.cut); if(!inp) return;
+    var kg=parseFloat(inp.value)||0; if(kg<0){ bad=true; }
+    rows.push({ shop_id:shop, product_id:pid, state:c.state, cut:c.cut, kg:kg, updated_at:now });
+  });
+  if(bad){ toast('Stock cannot be negative'); return; }
+  if(!rows.length){ toast('Nothing to save'); return; }
+  sb.from('ob_shop_stock').upsert(rows, { onConflict:'shop_id,product_id,state,cut' })
     .then(function(res){
       if(res.error){ toast('Error: '+res.error.message); return; }
       var shopName=(state.shops.filter(function(s){return s.id===shop;})[0]||{}).name||shop;

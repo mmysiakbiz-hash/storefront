@@ -3235,12 +3235,16 @@ function loadCatalog(){
       if(Array.isArray(d.shops) && d.shops.length){
         SHOPS = d.shops.map(function(sh){ return { id:sh.id, name:sh.name, phone:sh.phone, dist:'', stock:'In stock' }; });
       }
-      // stan w 4 sklepach (ob_shop_stock) -> SHOP_STOCK[product_id][shop_id] = {fresh_kg, frozen_kg}
+      // stan w 4 sklepach (ob_shop_stock) -> SHOP_STOCK[product_id][shop_id][state][cut] = kg
       SHOP_STOCK = {};
       if(Array.isArray(d.shopStock)){
         d.shopStock.forEach(function(r){
-          if(!SHOP_STOCK[r.product_id]) SHOP_STOCK[r.product_id]={};
-          SHOP_STOCK[r.product_id][r.shop_id]={ fresh_kg:Number(r.fresh_kg)||0, frozen_kg:Number(r.frozen_kg)||0 };
+          var pid=r.product_id, sh=r.shop_id, st=r.state, ct=r.cut;
+          if(!pid||!sh||!st||!ct) return;
+          if(!SHOP_STOCK[pid]) SHOP_STOCK[pid]={};
+          if(!SHOP_STOCK[pid][sh]) SHOP_STOCK[pid][sh]={};
+          if(!SHOP_STOCK[pid][sh][st]) SHOP_STOCK[pid][sh][st]={};
+          SHOP_STOCK[pid][sh][st][ct]=Number(r.kg)||0;
         });
       }
       window.__BOOT = d;
@@ -3322,7 +3326,7 @@ var SHOPS = [
   {name:'Anse Royale', dist:'10.3 km', stock:'In stock', phone:'+248 4 247 004'},
   {name:'Takamaka', dist:'13.8 km', stock:'Low stock', phone:'+248 4 247 005'}
 ];
-var SHOP_STOCK = {};  /* product_id -> shop_id -> {fresh_kg, frozen_kg}; filled from /bootstrap shopStock */
+var SHOP_STOCK = {};  /* product_id -> shop_id -> state -> cut -> kg; filled from /bootstrap shopStock */
 
 /* ---------- STATE ---------- */
 var state = {
@@ -3349,20 +3353,33 @@ function speciesById(id){ return CATALOG.find(function(s){return s.id===id}); }
 function shopStockBlock(pid){
   var ps = SHOP_STOCK[pid] || {};
   var list = SHOPS;
+  var cfg = state.cfg || {};
+  var prod = state.product || {};
+  var isBottle = (prod.type==='bottle') || (cfg.cut==='bottle');
+  var stt = isBottle ? 'fresh' : (cfg.state==='frozen' ? 'frozen' : 'fresh');
+  var cut = isBottle ? 'bottle' : (cfg.cut || 'whole');
+  var stateWord = stt==='frozen' ? 'Frozen' : 'Fresh';
+  var cutWord = (typeof CUTLBL!=='undefined' && CUTLBL[cut]) ? CUTLBL[cut] : cut;
   function q(k){ return k>0?((k%1?k.toFixed(1):k)+' kg'):'\u2014'; }
   var any=false;
   var cards = list.map(function(sh){
-    var rec=ps[sh.id]||{}; var f=rec.fresh_kg||0, z=rec.frozen_kg||0; if(f>0||z>0) any=true;
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px'+((f>0||z>0)?'':';opacity:.5')+'">'+
+    var byState=((ps[sh.id]||{})[stt])||{};
+    var val = Number(byState[cut]||0);
+    var on = val>0; if(on) any=true;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px'+(on?'':';opacity:.5')+'">'+
       '<span style="font-weight:600">'+sh.name+'</span>'+
-      '<span style="display:flex;gap:14px;font-size:13px;white-space:nowrap">'+
-        '<span>Fresh <b style="color:'+(f>0?'var(--ink)':'var(--mut)')+'">'+q(f)+'</b></span>'+
-        '<span>Frozen <b style="color:'+(z>0?'var(--ink)':'var(--mut)')+'">'+q(z)+'</b></span>'+
-      '</span></div>';
+      '<span style="font-size:13px;white-space:nowrap">'+(isBottle?'In stock ':(stateWord+' '+cutWord+' '))+'<b style="color:'+(on?'var(--ink)':'var(--mut)')+'">'+q(val)+'</b></span>'+
+    '</div>';
   }).join('');
-  var label = 'Also at our shops';
-  return '<div class="cfg-block"><label>'+label+'</label>'+
-    '<p class="muted" style="font-size:12.5px;margin:-2px 0 8px">Current stock at our shops \u2014 buy in person if you need it now'+(any?'':' \u2014 none recorded right now')+'. By weight (fresh / frozen); shops cut to order.</p>'+
+  var sp = prod.name || 'this fish';
+  var pickLine;
+  if(isBottle){
+    pickLine = 'In stock at our shops \u2014 buy in person if you need it now'+(any?'':' \u2014 none recorded right now')+'.';
+  } else {
+    pickLine = 'Showing '+stateWord.toLowerCase()+' '+sp+' '+cutWord.toLowerCase()+' \u2014 exactly what you picked. Buy in person if you need it now'+(any?'':' \u2014 none recorded right now')+'.';
+  }
+  return '<div class="cfg-block"><label>Also at our shops</label>'+
+    '<p class="muted" style="font-size:12.5px;margin:-2px 0 8px">'+pickLine+'</p>'+
     cards+'</div>';
 }
 function fmtKg(g){ return (g/1000).toFixed(g%1000===0?0:2)+' kg'; }
@@ -3395,6 +3412,7 @@ function go(screen){
   if(screen==='tb-box'){ renderTbBox(); }
   window.scrollTo(0,0);
   var app = el('app'); if(app) app.scrollTop = 0;
+  if(typeof syncGlobalHold==='function') syncGlobalHold();
 }
 
 /* ---------- SHOP: categories ---------- */
@@ -3584,7 +3602,7 @@ function renderProduct(){
   var cuts=cutsForState(s,c.state).filter(function(x){ return x!=='heads' && x!=='portions'; });
   var cutSeg=cuts.map(function(cut){ return '<button class="'+(c.cut===cut?'on':'')+'" onclick="setPCut(\''+cut+'\')">'+CUTLBL[cut]+'</button>'; }).join('');
   var pkg=priceForCut(s,c.state,c.cut);
-  var peopleSeg=[1,2,3,4,5,6,7,8].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
+  var peopleSeg=[2,4,6].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
 
   var recs=recsFor(); var sel=c.sel || (recs[0]&&recs[0].key);
   var recHtml;
@@ -3666,10 +3684,25 @@ function addToCart(){
       });
       state.cfg.sel=null; updateCartBadge();
       toast(s.name+' added — held '+Math.round(secs/60)+' min');
-      return loadUnits().then(function(){ go('cart'); });
+      return loadUnits().then(function(){ showAddedSheet(s.name); });
     })
     .catch(function(){ toast('Could not reserve — check connection.'); }).finally(function(){ btnDone(_b); });
 }
+
+function showAddedSheet(name){
+  closeAddedSheet();
+  var ov=document.createElement('div'); ov.id='addedsheet';
+  ov.style.cssText='position:fixed;inset:0;z-index:400;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(10,14,30,.45)';
+  ov.innerHTML='<div style="max-width:520px;width:100%;margin:0 auto;background:#fff;border-radius:18px 18px 0 0;padding:20px 18px 22px;box-shadow:0 -6px 24px rgba(0,0,0,.2)">'+
+      '<div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">'+svg('check',20,2)+'<h3 style="margin:0;font-family:\'Bodoni Moda\',Didot,Georgia,serif;font-size:19px">Added to basket</h3></div>'+
+      '<p style="margin:0 0 16px;color:var(--mut);font-size:13.5px">'+(name||'Item')+' is held for you while your timer runs.</p>'+
+      '<button class="btn" onclick="closeAddedSheet();go(\'cart\')">View basket</button>'+
+      '<button class="btn ghost" style="margin-top:10px" onclick="closeAddedSheet();go(\'shop\')">Continue shopping</button>'+
+    '</div>';
+  ov.addEventListener('click', function(e){ if(e.target===ov) closeAddedSheet(); });
+  document.body.appendChild(ov);
+}
+function closeAddedSheet(){ var o=document.getElementById('addedsheet'); if(o) o.remove(); }
 
 /* ---------- CART (v2 — reservation + countdown) ---------- */
 function cartSubtotal(){ return state.cart.reduce(function(s,i){return s+i.lineTotal},0); }
@@ -3776,7 +3809,32 @@ function startCartTimer(){
     }
   },1000);
 }
+function ensureGlobalHold(){
+  if(document.getElementById('globalhold')) return;
+  var d=document.createElement('div'); d.id='globalhold';
+  d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:300;display:none';
+  d.innerHTML='<div style="max-width:520px;margin:0 auto;background:#101a40;color:#fff;display:flex;align-items:center;gap:10px;padding:9px 14px;box-shadow:0 2px 12px rgba(0,0,0,.28)">'+
+    '<span class="gh-cd" style="font-family:\'Bodoni Moda\',Didot,Georgia,serif;font-weight:700;font-size:18px;color:var(--gilt);min-width:52px;font-variant-numeric:tabular-nums">0:00</span>'+
+    '<span class="gh-tx" style="flex:1;font-size:11px;opacity:.92;line-height:1.25">Your stock is held while the timer runs.</span>'+
+    '<button class="gh-ext" style="background:rgba(255,255,255,.16);border:0;color:#fff;font-weight:700;font-size:12px;padding:8px 11px;border-radius:8px;white-space:nowrap;cursor:pointer">Extend</button>'+
+  '</div>';
+  document.body.appendChild(d);
+}
+function syncGlobalHold(){
+  ensureGlobalHold();
+  var bar=document.getElementById('globalhold'); var app=el('app');
+  var kind=null, rem=0, canExt=false;
+  if(state.tb && state.tb.items && state.tb.items.length){ rem=tbRemainSec(); canExt=tbAnyExt(); kind='travel'; }
+  else if(state.cart && state.cart.length){ rem=remainSec(); canExt=state.cart.some(function(l){return !l.extended;}); kind='local'; }
+  var ownBar=(state.screen==='cart'||state.screen==='tb-shop'||state.screen==='tb-box');
+  if(!kind || rem<=0 || ownBar){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
+  bar.querySelector('.gh-cd').textContent=mmss(rem);
+  var ext=bar.querySelector('.gh-ext'); ext.style.display=canExt?'':'none';
+  ext.onclick=(kind==='travel')?function(){ extendTravel(); }:function(){ extendCart(); };
+  bar.style.display='block'; if(app) app.style.paddingTop='42px';
+}
 startCartTimer();
+setInterval(syncGlobalHold, 1000);
 
 /* ---------- DELIVERY ---------- */
 function renderDelivery(){
@@ -4110,8 +4168,10 @@ function openSoldOut(id){
     '<div class="pad" style="padding-top:0">'+
       '<h3 style="font-size:15px; margin:6px 0 12px">Available at shops</h3>'+
       SHOPS.map(function(sh){
-        var rec=(SHOP_STOCK[s.id]||{})[sh.id]; var kg=rec?(rec.fresh_kg+rec.frozen_kg):0; var has=kg>0;
-        var lbl=has?((kg%1?kg.toFixed(1):kg)+' kg in stock'):'Call to check';
+        var byShop=(SHOP_STOCK[s.id]||{})[sh.id]||{}; var tot=0;
+        Object.keys(byShop).forEach(function(st){ Object.keys(byShop[st]||{}).forEach(function(ct){ tot+=Number(byShop[st][ct])||0; }); });
+        var has=tot>0;
+        var lbl=has?((tot%1?tot.toFixed(1):tot)+' kg in stock'):'Call to check';
         var col=has?'var(--ok)':'var(--gilt)';
         return '<div class="point" style="cursor:default">'+
           '<span class="pc"><h4>'+sh.name+'</h4><p><b style="color:'+col+'">'+lbl+'</b></p></span>'+
@@ -4422,23 +4482,17 @@ function renderTbBox(){
     '<h3 style="font-size:15px;margin:4px 0 10px">In your box</h3><div class="cart-items" style="padding:0">'+(lines||'<p class="muted" style="font-size:12.5px">No items yet.</p>')+'</div>'+
     '<button class="btn ghost" style="margin-top:6px" onclick="go(\'tb-shop\')">Add more fish</button>'+
     '</div>'+
-    '<div class="sticky-foot"><button class="btn" '+(w<=0?'disabled':'')+' onclick="renderTbCollect();go(\'tb-collect\')">Continue to certificate \u2192</button></div>';
+    '<div class="sticky-foot"><button class="btn" '+(w<=0?'disabled':'')+' onclick="renderTbPay();go(\'tb-collect\')">Continue to payment \u2192</button></div>';
 }
 
-/* ----- screen 5: certificate + review + place ----- */
-function renderTbCollect(){
+/* ----- screen 5a: PAYMENT (pay first, documents after) ----- */
+function renderTbPay(){
   var t=state.tb, c=t.traveller;
   var shop=SHOPS.filter(function(x){return x.id===t.shop;})[0];
   var sub=tbSubtotal(), svc=tbServiceCharge(), cert=tbCertCharge(), total=sub+svc+cert;
   el('tb-collect-host').innerHTML='<div class="pad">'+
     '<div class="info-banner" style="margin-bottom:14px">Collecting at <b style="margin:0 4px">'+(shop?shop.name:'—')+'</b> on '+(t.collectionDate||'')+(t.collectionTime?(' \u00b7 '+t.collectionTime):'')+'</div>'+
-    '<h3 style="font-size:16px;margin:6px 0 4px">Health / export certificate</h3>'+
-    '<p class="muted" style="font-size:12.5px;margin-bottom:12px">Required for your veterinary / export certificate ('+money(cert)+').</p>'+
-    '<div class="field"><label>Full name (as on passport)</label><input id="tb-tname" placeholder="Full name" value="'+(c.name||'')+'"></div>'+
-    '<div class="field"><label>Passport number</label><input id="tb-tpass" placeholder="Passport no." value="'+(c.passport||'')+'"></div>'+
-    '<div class="field"><label>Nationality</label><input id="tb-tnat" placeholder="Nationality" value="'+(c.nationality||'')+'"></div>'+
-    '<div class="field"><label>Phone (WhatsApp)</label><input id="tb-tphone" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
-    '<h3 style="font-size:16px;margin:20px 0 12px">Order summary</h3>'+
+    '<h3 style="font-size:16px;margin:6px 0 12px">Order summary</h3>'+
     '<div class="cart-summary" style="margin:0">'+
       t.items.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.price)+'</span></div>'; }).join('')+
       '<div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span class="k">Fish subtotal</span><span class="v">'+money2(sub)+'</span></div>'+
@@ -4446,24 +4500,22 @@ function renderTbCollect(){
       '<div class="row"><span class="k">Certificate</span><span class="v">'+money2(cert)+'</span></div>'+
       '<div class="row tot"><span class="k">Total</span><span class="v">'+money2(total)+'</span></div>'+
     '</div>'+
-    '<div class="info-banner" style="margin-top:14px">Your order is placed as <b style="margin:0 3px">certificate pending</b> while we prepare your veterinary / export documents.</div>'+
+    '<div class="info-banner" style="margin-top:14px">Pay now to lock your box. You add your traveller documents (passport etc.) on the next step \u2014 no rush, your stock is already reserved.</div>'+
     '</div>'+
-    '<div class="sticky-foot"><button class="btn gilt" id="tbPayBtn" onclick="tbConfirm()">Confirm Travel Box \u00b7 '+money2(total)+'</button></div>';
+    '<div class="sticky-foot"><button class="btn gilt" id="tbPayBtn" onclick="tbConfirm()">Confirm &amp; pay \u00b7 '+money2(total)+'</button></div>';
 }
 
 function tbConfirm(){
-  var t=state.tb, c=t.traveller;
-  c.name=el('tb-tname').value.trim(); c.passport=el('tb-tpass').value.trim(); c.nationality=el('tb-tnat').value.trim(); c.phone=el('tb-tphone')?el('tb-tphone').value.trim():'';
-  if(!c.name||!c.passport){ toast('Please add traveller name and passport'); return; }
+  var t=state.tb, c=t.traveller||(t.traveller={});
   if(!t.items.length){ toast('Add some fish first'); go('tb-shop'); return; }
   var shop=SHOPS.filter(function(x){return x.id===t.shop;})[0];
   var dest=TB_DEST.filter(function(d){return d.code===t.destination;})[0];
   var payload={
     session: sid(), type:'travel',
-    customer:c.name, phone:c.phone, email:'',
+    customer:'', phone:'', email:'',
     fulfilment:null, dropPoint:null, shop:(shop&&shop.id)||null,
     payMethod: state.payMethod,
-    travel:{ date:t.date, collection_date:t.collectionDate, flight_time:t.flightTime, collection_time:t.collectionTime, destination:(dest?dest.label:t.destination), passport:c.passport, nationality:c.nationality, flight:t.flightNo }
+    travel:{ date:t.date, collection_date:t.collectionDate, flight_time:t.flightTime, collection_time:t.collectionTime, destination:(dest?dest.label:t.destination), passport:'', nationality:'', flight:t.flightNo }
   };
   var prev=tbBoxPreview(tbWeight());
   var order={ no:'', items:t.items.slice(), subtotal:tbSubtotal(), serviceCharge:tbServiceCharge(), certCharge:tbCertCharge(), total:tbTotal(),
@@ -4481,12 +4533,48 @@ function tbConfirm(){
         if(od.service_charge!=null) order.serviceCharge=Number(od.service_charge);
         if(od.certification_charge!=null) order.certCharge=Number(od.certification_charge);
         saveOrderNo(order.no); state.orders.unshift(order);
-        renderTbSuccess(order, shop); state.tb.items=[]; loadUnits(); go('tb-success'); return;
+        state.tb.placedOrder=order; state.tb.items=[]; loadUnits(); renderTbDocs(); go('tb-collect'); return;
       }
       btnDone(btn);
       toast(res.error?('Could not place order: '+res.error):'Could not place Travel Box order');
     })
     .catch(function(){ btnDone(btn); toast('Network problem — order not placed.'); });
+}
+
+/* ----- screen 5b: traveller documents (AFTER payment) ----- */
+function renderTbDocs(){
+  var t=state.tb, c=t.traveller||(t.traveller={}), order=t.placedOrder||{};
+  var cert=tbCertCharge();
+  el('tb-collect-host').innerHTML='<div class="pad">'+
+    '<div class="info-banner" style="margin-bottom:14px;background:#143b1e;color:#dff5e4">'+svg('check',14,1.8)+' Payment received \u2014 order <b style="margin:0 3px">'+(order.no||'')+'</b>. Now add your traveller documents.</div>'+
+    '<h3 style="font-size:16px;margin:6px 0 4px">Health / export certificate</h3>'+
+    '<p class="muted" style="font-size:12.5px;margin-bottom:12px">Required for your veterinary / export certificate ('+money(cert)+'). Take your time \u2014 your box is paid and reserved.</p>'+
+    '<div class="field"><label>Full name (as on passport)</label><input id="tb-tname" placeholder="Full name" value="'+(c.name||'')+'"></div>'+
+    '<div class="field"><label>Passport number</label><input id="tb-tpass" placeholder="Passport no." value="'+(c.passport||'')+'"></div>'+
+    '<div class="field"><label>Nationality</label><input id="tb-tnat" placeholder="Nationality" value="'+(c.nationality||'')+'"></div>'+
+    '<div class="field"><label>Phone</label><input id="tb-tphone" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
+    '<p class="muted" style="font-size:12px;margin-top:2px">More document fields will be added here once finalised.</p>'+
+    '</div>'+
+    '<div class="sticky-foot"><button class="btn gilt" id="tbDocsBtn" onclick="tbSubmitDocs()">Submit documents \u2192</button></div>';
+}
+function tbSubmitDocs(){
+  var t=state.tb, c=t.traveller||(t.traveller={}), order=t.placedOrder||{};
+  c.name=el('tb-tname').value.trim(); c.passport=el('tb-tpass').value.trim(); c.nationality=el('tb-tnat').value.trim(); c.phone=el('tb-tphone')?el('tb-tphone').value.trim():'';
+  if(!c.name||!c.passport){ toast('Please add traveller name and passport'); return; }
+  var dest=TB_DEST.filter(function(d){return d.code===t.destination;})[0];
+  var shop=SHOPS.filter(function(x){return x.id===t.shop;})[0];
+  var btn=el('tbDocsBtn'); btnSpin(btn);
+  fetch(API_BASE+'/certificate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    order:order.no, name:c.name, passport:c.passport, nationality:c.nationality,
+    destination:(dest?dest.label:t.destination), flight:t.flightNo, phone:c.phone, email:''
+  })})
+    .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,res:res}; }).catch(function(){ return {ok:r.ok,res:{}}; }); })
+    .then(function(o){
+      if(!o.ok){ btnDone(btn); toast('Could not save documents \u2014 please try again.'); return; }
+      order.customer={name:c.name,phone:c.phone};
+      renderTbSuccess(order, shop); go('tb-success');
+    })
+    .catch(function(){ btnDone(btn); toast('Could not submit \u2014 you can add documents at the shop.'); });
 }
 
 function renderTbSuccess(order, shop){
