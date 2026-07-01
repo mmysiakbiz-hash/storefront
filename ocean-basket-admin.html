@@ -735,5 +735,93 @@ boot();
 
 </script>
 <div id="print-area"></div>
+
+<!-- ============================================================= -->
+<!-- OCEAN BASKET · "ADD DRIVER" — paste this whole block just     -->
+<!-- BEFORE the closing </body> tag in ocean-basket-admin.html.    -->
+<!-- It uses the admin's existing Supabase client `sb`.            -->
+<!-- ============================================================= -->
+<style>
+  #obDrvLauncher{position:fixed;right:16px;bottom:16px;z-index:900;background:#0a1140;color:#fff;
+    border:none;border-radius:999px;padding:13px 18px;font:600 14px 'Outfit',sans-serif;cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  #obDrvBackdrop{position:fixed;inset:0;background:rgba(10,17,64,.45);z-index:901;display:none;
+    align-items:center;justify-content:center;padding:18px}
+  #obDrvBackdrop.on{display:flex}
+  .obDrvCard{width:100%;max-width:420px;background:#faf7f0;border-radius:10px;padding:20px;
+    font-family:'Outfit',sans-serif;color:#23262b}
+  .obDrvCard h3{font-family:'Bodoni Moda',serif;font-weight:500;font-size:22px;color:#0a1140;margin:0 0 4px}
+  .obDrvCard p.sub{color:#857f74;font-size:13px;margin:0 0 16px}
+  .obDrvCard label{display:block;font-size:12px;font-weight:600;margin:0 0 5px}
+  .obDrvCard input{width:100%;font:15px 'Outfit',sans-serif;padding:12px;border:1px solid #e4ddcf;
+    border-radius:4px;background:#fff;margin-bottom:13px}
+  .obDrvRow{display:flex;gap:9px;margin-top:4px}
+  .obDrvRow button{flex:1;font:700 14px 'Outfit',sans-serif;padding:13px;border-radius:4px;cursor:pointer;border:1px solid #e4ddcf}
+  .obDrvRow .go{background:#0a1140;color:#fff;border-color:#0a1140}
+  .obDrvRow .cancel{background:#fff;color:#23262b}
+  #obDrvMsg{font-size:13px;line-height:1.5;margin:0 0 14px}
+  #obDrvMsg .err{background:#f6ece7;color:#b5573a;border:1px solid #b5573a;border-radius:6px;padding:11px;display:block}
+  #obDrvMsg .ok{background:#edf3ee;color:#3f7a5a;border:1px solid #3f7a5a;border-radius:6px;padding:11px;display:block}
+  #obDrvLink{width:100%;font:12px ui-monospace,monospace;padding:10px;border:1px solid #e4ddcf;border-radius:4px;background:#fff;margin-top:10px}
+</style>
+
+<button id="obDrvLauncher">＋ Add driver</button>
+<div id="obDrvBackdrop">
+  <div class="obDrvCard">
+    <h3>Add a driver</h3>
+    <p class="sub">Creates the account and gives you a set-up link to send them. They open it, set a password, then log into the driver app.</p>
+    <div id="obDrvMsg"></div>
+    <div id="obDrvForm">
+      <label>Name</label>
+      <input id="obDrvName" type="text" placeholder="e.g. Jean Robert"/>
+      <label>Email</label>
+      <input id="obDrvEmail" type="email" placeholder="driver@example.com"/>
+      <div class="obDrvRow">
+        <button class="cancel" id="obDrvCancel">Cancel</button>
+        <button class="go" id="obDrvGo">Create &amp; get link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var ENDPOINT='https://storekit-pi.vercel.app/api/ocean-basket/v2/create-driver';
+  var L=document.getElementById('obDrvLauncher'),
+      B=document.getElementById('obDrvBackdrop'),
+      M=document.getElementById('obDrvMsg'),
+      F=document.getElementById('obDrvForm');
+  function open(){ M.innerHTML=''; F.style.display=''; B.classList.add('on'); }
+  function close(){ B.classList.remove('on'); document.getElementById('obDrvName').value=''; document.getElementById('obDrvEmail').value=''; }
+  L.onclick=open;
+  document.getElementById('obDrvCancel').onclick=close;
+  B.onclick=function(e){ if(e.target===B) close(); };
+  document.getElementById('obDrvGo').onclick=async function(){
+    var name=document.getElementById('obDrvName').value.trim();
+    var email=document.getElementById('obDrvEmail').value.trim();
+    var btn=this;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ M.innerHTML='<span class="err">Enter a valid email.</span>'; return; }
+    btn.disabled=true; btn.textContent='Creating…'; M.innerHTML='';
+    try{
+      var sess=(await sb.auth.getSession()).data.session;
+      if(!sess){ M.innerHTML='<span class="err">Your session expired — log in again.</span>'; btn.disabled=false; btn.textContent='Create & get link'; return; }
+      var res=await fetch(ENDPOINT,{ method:'POST',
+        headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+sess.access_token },
+        body:JSON.stringify({ name:name, email:email }) });
+      var out=await res.json();
+      if(!res.ok || !out.ok){ M.innerHTML='<span class="err">Could not create: '+(out.error||res.status)+'</span>'; btn.disabled=false; btn.textContent='Create & get link'; return; }
+      F.style.display='none';
+      M.innerHTML='<span class="ok">Driver created: '+out.email+'. Send them this set-up link:</span>'+
+        '<input id="obDrvLink" readonly value="'+(out.invite_link||'')+'"/>'+
+        '<div class="obDrvRow" style="margin-top:12px"><button class="go" id="obDrvCopy">Copy link</button><button class="cancel" id="obDrvDone">Done</button></div>';
+      document.getElementById('obDrvLink').onclick=function(){ this.select(); };
+      document.getElementById('obDrvCopy').onclick=function(){ var i=document.getElementById('obDrvLink'); i.select(); document.execCommand('copy'); this.textContent='Copied'; };
+      document.getElementById('obDrvDone').onclick=close;
+    }catch(err){ M.innerHTML='<span class="err">Network error: '+err.message+'</span>'; btn.disabled=false; btn.textContent='Create & get link'; }
+  };
+})();
+</script>
+<!-- ===================== end Add driver block ===================== -->
+
 </body>
 </html>
