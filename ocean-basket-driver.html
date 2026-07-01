@@ -147,16 +147,32 @@ async function bagLoop(freezer){
     '<button class="btn" id="scanBag" style="margin-top:6px">'+svgScan()+' Scan a bag</button>'+
     '<button class="btn sec" id="doneBags" style="margin-top:10px">Done — back to run</button>';
   document.getElementById('doneBags').onclick=screenRun;
-  document.getElementById('scanBag').onclick=async function(){
-    var b=await scanOnce('Scan the bag QR');
-    if(!b||b.error){ if(b&&b.error) alert('Camera not available.'); return; }
-    var order=b.text.trim();
-    var {data,error}=await sb.rpc('ob_driver_deliver',{p_store:STORE,p_order:order,p_drop_point:freezer});
-    var R=document.getElementById('result');
-    if(error){ R.innerHTML='<div class="msg err">'+error.message+'</div>'; return; }
-    if(data&&data.ok){ R.innerHTML='<div class="msg ok"><b>'+order+'</b> → in. Status is now ready for collection.</div>'; }
-    else { var why=(data&&data.reason)||'no match'; var extra=data&&data.belongs_to?(' (belongs to '+data.belongs_to+')'):''; R.innerHTML='<div class="msg err"><b>'+order+'</b> — '+why.replace(/_/g,' ')+extra+'. Keep it for the right point.</div>'; }
-  };
+  document.getElementById('scanBag').onclick=function(){ scanBagInto(freezer); };
+}
+async function scanBagInto(freezer){
+  var b=await scanOnce('Scan the bag QR');
+  if(!b||b.error){ if(b&&b.error) alert('Camera not available.'); return; }
+  var order=b.text.trim();
+  var {data,error}=await sb.rpc('ob_driver_deliver',{p_store:STORE,p_order:order,p_drop_point:freezer});
+  if(error){ errorBag(freezer, order, error.message); return; }
+  if(data&&data.ok){ deliveredScreen(order, freezer); }
+  else { var why=(data&&data.reason)||'no match'; var extra=data&&data.belongs_to?(' (belongs to '+data.belongs_to+')'):''; errorBag(freezer, order, why.replace(/_/g,' ')+extra); }
+}
+function deliveredScreen(order, freezer){
+  view.innerHTML=
+    '<div style="text-align:center;padding:34px 0 6px">'+
+      '<div style="width:96px;height:96px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:flex;align-items:center;justify-content:center;font-size:52px;line-height:1;margin:0 auto 20px;border:2px solid var(--ok)">✓</div>'+
+      '<h1 style="margin:0 0 8px">Bag in freezer</h1>'+
+      '<p class="sub" style="margin:0 auto"><b>'+order+'</b><br>is now in <b>'+freezer+'</b> — ready for the customer to collect.</p>'+
+    '</div>'+
+    '<button class="btn" id="nextBag" style="margin-top:20px">'+svgScan()+' Scan next bag</button>'+
+    '<button class="btn sec" id="backRun" style="margin-top:10px">Done — back to run</button>';
+  document.getElementById('nextBag').onclick=function(){ scanBagInto(freezer); };
+  document.getElementById('backRun').onclick=screenRun;
+}
+function errorBag(freezer, order, msg){
+  bagLoop(freezer);
+  document.getElementById('result').innerHTML='<div class="msg err"><b>'+order+'</b> — '+msg+'. Keep it for the right point.</div>';
 }
 
 async function logout(){ await sb.auth.signOut(); screenLogin('Logged out.'); }
