@@ -67,10 +67,18 @@ function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()
 /* ---------- camera scanner: returns decoded text ---------- */
 let scanStream=null;
 function stopScan(){var s=document.getElementById('scan');s.classList.remove('on');if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
+function ensureConfirm(){
+  var box=document.getElementById('scan'); var c=document.getElementById('scanConfirm'); if(c) return c;
+  c=document.createElement('div'); c.id='scanConfirm';
+  c.style.cssText='position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.35);display:none';
+  c.innerHTML='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#857f74;font-weight:700;margin-bottom:6px">Captured</div><div class="cval" style="font-family:ui-monospace,monospace;font-size:18px;font-weight:700;color:#0a1140;word-break:break-all;margin-bottom:14px"></div><div style="display:flex;gap:10px"><button class="credo" style="flex:1;padding:14px;border-radius:6px;border:1px solid #e4ddcf;background:#fff;font:700 15px Outfit,sans-serif;color:#23262b">Scan again</button><button class="cuse" style="flex:1;padding:14px;border-radius:6px;border:0;background:#0a1140;color:#fff;font:700 15px Outfit,sans-serif">Use this</button></div>';
+  box.appendChild(c); return c;
+}
 function scanOnce(title){
   return new Promise(async (resolve)=>{
     var box=document.getElementById('scan'), vid=document.getElementById('scanVid');
     document.getElementById('scanTitle').textContent=title||'Scan';
+    var conf=ensureConfirm(); conf.style.display='none'; var paused=false;
     document.getElementById('scanX').onclick=()=>{stopScan();resolve(null);};
     box.classList.add('on');
     try{ scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }
@@ -80,14 +88,19 @@ function scanOnce(title){
     var cv=document.createElement('canvas'), cx=cv.getContext('2d',{willReadFrequently:true});
     (function tick(){
       if(!box.classList.contains('on')) return;
-      if(vid.readyState===vid.HAVE_ENOUGH_DATA){
+      if(!paused && vid.readyState===vid.HAVE_ENOUGH_DATA){
         cv.width=vid.videoWidth; cv.height=vid.videoHeight; cx.drawImage(vid,0,0,cv.width,cv.height);
-        if(det){ det.detect(vid).then(cs=>{ if(cs&&cs.length){ done(cs[0].rawValue); } }).catch(()=>{}); }
-        else { var img=cx.getImageData(0,0,cv.width,cv.height); var r=window.jsQR&&jsQR(img.data,cv.width,cv.height); if(r&&r.data){ done(r.data); return; } }
+        if(det){ det.detect(vid).then(cs=>{ if(!paused && cs&&cs.length){ capture(cs[0].rawValue); } }).catch(()=>{}); }
+        else { var img=cx.getImageData(0,0,cv.width,cv.height); var r=window.jsQR&&jsQR(img.data,cv.width,cv.height); if(r&&r.data){ capture(r.data); } }
       }
       requestAnimationFrame(tick);
     })();
-    function done(text){ stopScan(); resolve({text:text}); }
+    function capture(text){
+      if(paused) return; paused=true;
+      conf.querySelector('.cval').textContent=text; conf.style.display='block';
+      conf.querySelector('.cuse').onclick=function(){ stopScan(); resolve({text:text}); };
+      conf.querySelector('.credo').onclick=function(){ conf.style.display='none'; paused=false; };
+    }
   });
 }
 
