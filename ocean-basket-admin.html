@@ -709,7 +709,7 @@ function userForm(u){
   el('modal').innerHTML='<h3 style="font-size:20px;margin-bottom:14px">'+(u.id?'Edit staff':'Add staff')+'</h3>'+
     '<div class="field"><label>Email (their login)</label><input id="u-email" type="email" value="'+(u.email||'')+'" '+(u.id?'readonly':'')+' placeholder="name@oceanbasket.sc"></div>'+
     '<div class="field"><label>Full name</label><input id="u-name" value="'+(u.full_name||'')+'"></div>'+
-    '<div class="field"><label>Role</label><select id="u-role"><option value="staff">staff</option><option value="manager">manager</option><option value="owner">owner</option></select></div>'+
+    '<div class="field"><label>Role</label><select id="u-role"><option value="staff">staff</option><option value="manager">manager</option><option value="owner">owner</option><option value="driver">driver</option></select></div>'+
     '<div class="field"><label>Permissions</label>'+pc('can_scan','Scan-in stock')+pc('can_edit_stock','Edit 4-shop stock')+pc('can_view_orders','View orders &amp; pick lists')+pc('can_manage_routes','Manage routes / points')+pc('can_manage_users','Manage users')+'</div>'+
     '<div class="field"><label>Shops <span class="muted" style="font-weight:400">(none ticked = all)</span></label>'+(shopCx||'<span class="muted" style="font-size:13px">no shops</span>')+'</div>'+
     '<div class="field"><label>Points <span class="muted" style="font-weight:400">(none ticked = all)</span></label><div style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:4px;padding:8px">'+(pointCx||'<span class="muted" style="font-size:13px">no points</span>')+'</div></div>'+
@@ -719,17 +719,47 @@ function userForm(u){
   el('modal-bg').classList.add('on');
 }
 function _chk(grp){ return Array.prototype.slice.call(document.querySelectorAll('input[data-grp="'+grp+'"]:checked')).map(function(c){return c.value;}); }
-function userSave(id){
+async function userSave(id){
   var email=(el('u-email').value||'').trim().toLowerCase(); if(!email){ toast('Email is required'); return; }
   var rec={ store_id:STORE_ID, email:email, full_name:(el('u-name').value||'').trim(), role:el('u-role').value, active:el('u-active').checked,
     shop_ids:_chk('u-shop'), point_ids:_chk('u-point'),
     can_scan:el('u-can_scan').checked, can_edit_stock:el('u-can_edit_stock').checked, can_view_orders:el('u-can_view_orders').checked,
     can_manage_routes:el('u-can_manage_routes').checked, can_manage_users:el('u-can_manage_users').checked };
-  if(id){ rec.id=id; }
-  sb.from('ob_staff').upsert(rec,{ onConflict:'store_id,email' }).then(function(res){
-    if(res.error){ toast('Error: '+res.error.message); return; }
-    toast('Saved \u00b7 '+email); closeModal(); Promise.resolve(loadStaff()).then(renderUsers);
-  });
+  if(id){
+    rec.id=id;
+    sb.from('ob_staff').upsert(rec,{ onConflict:'store_id,email' }).then(function(res){
+      if(res.error){ toast('Error: '+res.error.message); return; }
+      toast('Saved \u00b7 '+email); closeModal(); Promise.resolve(loadStaff()).then(renderUsers);
+    });
+    return;
+  }
+  // NEW account: create login + email set-password link (server-side, service role)
+  var sess=await sb.auth.getSession();
+  var token=(sess&&sess.data&&sess.data.session)?sess.data.session.access_token:null;
+  if(!token){ toast('Session expired \u2014 log in again'); return; }
+  toast('Creating account\u2026');
+  try{
+    var resp=await fetch('https://storekit-pi.vercel.app/api/ocean-basket/v2/create-user',{
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({ email:email, name:rec.full_name, role:rec.role, active:rec.active,
+        can_scan:rec.can_scan, can_edit_stock:rec.can_edit_stock, can_view_orders:rec.can_view_orders,
+        can_manage_routes:rec.can_manage_routes, can_manage_users:rec.can_manage_users,
+        shop_ids:rec.shop_ids, point_ids:rec.point_ids }) });
+    var out={}; try{ out=await resp.json(); }catch(e){}
+    if(!resp.ok || out.error){ toast('Error: '+(out.error||('HTTP '+resp.status))); return; }
+    Promise.resolve(loadStaff()).then(renderUsers);
+    if(out.emailed){ closeModal(); toast('Account created \u00b7 set-password link emailed to '+email); }
+    else { showInviteLink(email, out.invite_link); }
+  }catch(e){ toast('Network error \u2014 try again'); }
+}
+function showInviteLink(email, link){
+  el('modal').innerHTML='<h3 style="font-size:20px;margin-bottom:10px">Account created</h3>'+
+    '<p style="color:#857f74;font-size:14px;margin-bottom:12px">The set-password email could not be sent automatically. Send this link to <b>'+email+'</b> so they can set their password:</p>'+
+    '<div id="u-invite" style="word-break:break-all;background:#f6f3ec;border:1px solid #e4ddcf;border-radius:6px;padding:10px;font-size:12px;font-family:ui-monospace,monospace">'+(link||'(no link generated)')+'</div>'+
+    '<div style="display:flex;gap:10px;margin-top:14px">'+
+      '<button style="background:#0a1140;color:#fff;border:0;border-radius:6px;padding:11px 16px;font-weight:700;cursor:pointer" onclick="var t=document.getElementById(\'u-invite\');if(navigator.clipboard){navigator.clipboard.writeText(t.textContent);}toast(\'Link copied\')">Copy link</button>'+
+      '<button style="background:#fff;border:1px solid #e4ddcf;border-radius:6px;padding:11px 16px;font-weight:700;cursor:pointer" onclick="closeModal()">Done</button>'+
+    '</div>';
 }
 
 boot();
