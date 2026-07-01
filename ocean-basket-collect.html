@@ -74,18 +74,46 @@ function screenEnter(){
   document.getElementById('go').onclick=function(){var o=document.getElementById('ord').value.trim();if(o)screenPass(o);};
   if(pre) screenPass(pre);
 }
+function stepRow(label,val){
+  var done=!!val;
+  var badge=done
+    ? '<span style="width:28px;height:28px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center">'+I.check+'</span>'
+    : '<span style="width:28px;height:28px;border-radius:50%;border:1px solid var(--line);color:var(--mut);display:grid;place-items:center;font-size:13px">–</span>';
+  return '<div style="display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid '+(done?'var(--ok)':'var(--line)')+';border-radius:8px;background:'+(done?'var(--ok-bg)':'#fff')+';margin-bottom:9px">'+
+    '<span style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+label+'</div><div style="font-size:12px;color:var(--mut);word-break:break-all">'+(val||'not scanned')+'</div></span>'+badge+'</div>';
+}
 function screenPass(order){
-  view.innerHTML='<p class="eyebrow">Your pass</p><h1>Collect your order</h1><p class="sub">Find your bag <b>'+order+'</b>, then scan the freezer to confirm.</p><div class="gate"><div class="lbl">Your order</div><div class="big">'+order+'</div><div class="qrwrap">'+qrSvg(order)+'</div></div><button class="btn" id="doScan" style="margin-top:14px">'+I.scan+' Scan the freezer</button><button class="btn sec" id="back" style="margin-top:10px">Change order</button>';
-  document.getElementById('back').onclick=screenEnter;
-  document.getElementById('doScan').onclick=async function(){
-    var r=await scanOnce();
-    if(!r){return;} if(r.error){alert('Camera not available. Use a phone browser over HTTPS.');return;}
-    var freezer=r.text.trim();
-    var {data,error}=await sb.rpc('ob_collect',{p_store:STORE,p_order:order,p_drop_point:freezer});
-    if(error){ result(order,false,error.message); return; }
-    if(data&&data.ok){ result(order,true,data.already?'Already collected.':''); }
-    else { var why=(data&&data.reason||'no match').replace(/_/g,' '); var ex=data&&data.belongs_to?(' (your freezer is '+data.belongs_to+')'):''; result(order,false,why+ex); }
-  };
+  var got={freezer:null,bag:null,cust:null};
+  var steps=[{k:'freezer',label:'Freezer QR'},{k:'bag',label:'Bag sticker QR'},{k:'cust',label:'Customer pass QR'}];
+  render();
+  function render(){
+    var next=steps.filter(function(s){return !got[s.k];})[0];
+    view.innerHTML='<p class="eyebrow">Collection</p><h1>Collect '+order+'</h1>'+
+      '<p class="sub">Scan all three to confirm: the freezer, your bag sticker, and your pass. All must match.</p>'+
+      '<div class="card">'+steps.map(function(s){return stepRow(s.label,got[s.k]);}).join('')+'</div>'+
+      (next
+        ? '<button class="btn" id="doScan">'+I.scan+' Scan '+next.label+'</button>'
+        : '<div class="msg ok">All three scanned — confirming…</div>')+
+      '<button class="btn sec" id="back" style="margin-top:10px">Cancel</button>';
+    document.getElementById('back').onclick=screenEnter;
+    if(next){
+      document.getElementById('doScan').onclick=async function(){
+        var r=await scanOnce();
+        if(!r){return;} if(r.error){alert('Camera not available (needs HTTPS + camera permission).');return;}
+        got[next.k]=r.text.trim(); render();
+      };
+    } else { finish(); }
+  }
+  async function finish(){
+    if(got.bag!==got.cust){ return result(order,false,'the bag and the pass are different orders'); }
+    if(got.bag!==order){ return result(order,false,'scanned bag is a different order ('+got.bag+')'); }
+    var {data,error}=await sb.rpc('ob_collect',{p_store:STORE,p_order:order,p_drop_point:got.freezer});
+    if(error){ return result(order,false,error.message); }
+    if(data&&data.ok){ return result(order,true,data.already?'Already collected.':''); }
+    var why=(data&&data.reason||'no match').replace(/_/g,' ');
+    var ex=data&&data.belongs_to?(' (this bag belongs to '+data.belongs_to+')'):'';
+    result(order,false,why+ex);
+  }
 }
 function result(order,ok,note){
   if(ok){ view.innerHTML='<div class="verdict go"><div class="ico">'+I.check+'</div><div class="head">Collected — enjoy</div><div class="txt">'+order+' is confirmed. '+(note||'Take your bag and you\'re done.')+'</div></div><button class="btn sec" id="again">Collect another</button>'; }
