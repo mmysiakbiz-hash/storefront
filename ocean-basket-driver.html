@@ -6,36 +6,47 @@
 <title>Ocean Basket — Driver</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --paper:#faf7f0; --paper2:#f1ece1; --ink:#0a1140; --char:#23262b;
-    --gilt:#1ba8d3; --line:#e4ddcf; --mut:#857f74;
-    --ok:#3f7a5a; --ok-bg:#edf3ee; --pink:#b5573a; --pink-bg:#f6ece7;
-    --max:480px; --serif:'Bodoni Moda',Didot,Georgia,serif;
-    --sans:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;
-  }
+  :root{--paper:#faf7f0;--paper2:#f1ece1;--ink:#0a1140;--char:#23262b;--gilt:#1ba8d3;--line:#e4ddcf;--mut:#857f74;
+    --ok:#3f7a5a;--ok-bg:#edf3ee;--pink:#b5573a;--pink-bg:#f6ece7;--max:480px;
+    --serif:'Bodoni Moda',Didot,Georgia,serif;--sans:'Outfit',-apple-system,sans-serif}
   *{box-sizing:border-box} html,body{margin:0;height:100%}
   body{font-family:var(--sans);background:#0a0a0a;color:var(--char);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
   .app{max-width:var(--max);margin:0 auto;min-height:100dvh;background:var(--paper);display:flex;flex-direction:column;box-shadow:0 0 60px rgba(0,0,0,.3)}
-  .topbar{position:sticky;top:0;background:var(--ink);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px}
+  .topbar{position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px}
   .topbar .mark{width:24px;height:24px;border-radius:6px;background:linear-gradient(150deg,var(--gilt),#0f6f8c)}
   .topbar b{font-weight:600;font-size:14.5px}
   .topbar .role{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.28);border-radius:3px;padding:4px 9px}
   .body{padding:22px 18px 30px;flex:1}
   .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:var(--mut);font-weight:600;margin:0 0 10px}
-  h1{font-family:var(--serif);font-weight:500;font-size:30px;line-height:1.1;color:var(--ink);margin:2px 0 8px}
-  .sub{color:var(--mut);font-size:14px;margin:0 0 22px}
-  label{display:block;font-size:12px;font-weight:600;color:var(--char);margin:0 0 6px;letter-spacing:.01em}
-  input{width:100%;font-family:inherit;font-size:15px;padding:13px 14px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--char);margin-bottom:14px}
+  h1{font-family:var(--serif);font-weight:500;font-size:29px;line-height:1.1;color:var(--ink);margin:2px 0 8px}
+  .sub{color:var(--mut);font-size:14px;margin:0 0 20px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--char);margin:0 0 6px}
+  input{width:100%;font-family:inherit;font-size:15px;padding:13px 14px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-bottom:14px}
   input:focus{outline:none;border-color:var(--gilt)}
   .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--ink);color:#fff;font-family:inherit;font-weight:700;font-size:15px;padding:15px 20px;border-radius:4px;border:1px solid var(--ink);cursor:pointer;letter-spacing:.02em}
   .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.55}
+  .btn.sec{background:#fff;color:var(--char);border-color:var(--line);font-weight:600}
+  .btn svg{width:18px;height:18px}
   .msg{font-size:13.5px;padding:12px 14px;border-radius:6px;margin:0 0 16px;line-height:1.5}
   .msg.err{background:var(--pink-bg);color:var(--pink);border:1px solid var(--pink)}
   .msg.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
-  .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px}
-  .hint{font-size:12.5px;color:var(--mut);text-align:center;margin:16px 4px 0;line-height:1.5}
+  .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:9px}
+  .row .code{font-family:var(--serif);font-weight:600;font-size:19px;color:var(--ink);min-width:auto}
+  .row .who{flex:1;min-width:0} .row .who .n{font-size:14px;font-weight:600} .row .who .m{font-size:12px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .st{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;padding:4px 8px;border-radius:3px;border:1px solid var(--line);color:var(--mut)}
+  .row[data-s="ready"] .st,.row[data-s="collected"] .st{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
+  .hint{font-size:12.5px;color:var(--mut);text-align:center;margin:14px 4px 0;line-height:1.5}
+  /* scanner overlay */
+  #scan{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column}
+  #scan.on{display:flex}
+  #scan video{flex:1;width:100%;object-fit:cover}
+  #scan .frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:66vw;max-width:280px;height:66vw;max-height:280px;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+  #scan .bar{position:absolute;top:0;left:0;right:0;padding:16px 18px;color:#fff;font-weight:600;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(#000a,transparent)}
+  #scan .bar button{background:rgba(255,255,255,.16);border:0;color:#fff;font:600 14px var(--sans);padding:9px 14px;border-radius:8px;cursor:pointer}
+  #scan .tip{position:absolute;bottom:26px;left:0;right:0;text-align:center;color:#fff;font-size:13.5px;text-shadow:0 1px 3px #000}
 </style>
 </head>
 <body>
@@ -43,84 +54,108 @@
   <div class="topbar"><span class="mark"></span><b>Ocean Basket</b><span class="role">Driver</span></div>
   <div class="body" id="view"><div class="card">Loading…</div></div>
 </div>
+<div id="scan"><div class="bar"><span id="scanTitle">Scan</span><button id="scanX">Cancel</button></div><video id="scanVid" playsinline></video><div class="frame"></div><div class="tip" id="scanTip">Point at the QR code</div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-const SUPABASE_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
-const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: { detectSessionInUrl:true, flowType:'implicit', persistSession:true, autoRefreshToken:true }
-});
+const SUPABASE_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co', SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU', STORE='11111111-1111-1111-1111-111111111111';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{detectSessionInUrl:true,flowType:'implicit',persistSession:true,autoRefreshToken:true}});
 const view=document.getElementById('view');
-const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
+/* ---------- camera scanner: returns decoded text ---------- */
+let scanStream=null;
+function stopScan(){var s=document.getElementById('scan');s.classList.remove('on');if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
+function scanOnce(title){
+  return new Promise(async (resolve)=>{
+    var box=document.getElementById('scan'), vid=document.getElementById('scanVid');
+    document.getElementById('scanTitle').textContent=title||'Scan';
+    document.getElementById('scanX').onclick=()=>{stopScan();resolve(null);};
+    box.classList.add('on');
+    try{ scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }
+    catch(e){ stopScan(); resolve({error:'camera_denied'}); return; }
+    vid.srcObject=scanStream; await vid.play();
+    var det=('BarcodeDetector' in window)? new window.BarcodeDetector({formats:['qr_code']}):null;
+    var cv=document.createElement('canvas'), cx=cv.getContext('2d',{willReadFrequently:true});
+    (function tick(){
+      if(!box.classList.contains('on')) return;
+      if(vid.readyState===vid.HAVE_ENOUGH_DATA){
+        cv.width=vid.videoWidth; cv.height=vid.videoHeight; cx.drawImage(vid,0,0,cv.width,cv.height);
+        if(det){ det.detect(vid).then(cs=>{ if(cs&&cs.length){ done(cs[0].rawValue); } }).catch(()=>{}); }
+        else { var img=cx.getImageData(0,0,cv.width,cv.height); var r=window.jsQR&&jsQR(img.data,cv.width,cv.height); if(r&&r.data){ done(r.data); return; } }
+      }
+      requestAnimationFrame(tick);
+    })();
+    function done(text){ stopScan(); resolve({text:text}); }
+  });
+}
+
+/* ---------- auth screens (login / set password) ---------- */
 function screenSetPassword(){
-  view.innerHTML=`
-    <p class="eyebrow">Welcome</p><h1>Set your password</h1>
-    <p class="sub">Choose a password for your driver account. Next time you just log in with your email and this password.</p>
-    <div id="msg"></div>
-    <div class="card">
-      <label>New password</label>
-      <input id="pw" type="password" autocomplete="new-password" placeholder="At least 8 characters"/>
-      <label>Repeat password</label>
-      <input id="pw2" type="password" autocomplete="new-password" placeholder="Repeat it"/>
-      <button class="btn" id="save">Set password &amp; continue</button>
-    </div>`;
-  document.getElementById('save').onclick=async()=>{
-    const pw=document.getElementById('pw').value, pw2=document.getElementById('pw2').value;
-    const msg=document.getElementById('msg');
-    if(pw.length<8){msg.innerHTML='<div class="msg err">Password needs at least 8 characters.</div>';return;}
-    if(pw!==pw2){msg.innerHTML='<div class="msg err">The two passwords don\'t match.</div>';return;}
-    const btn=document.getElementById('save'); btn.disabled=true; btn.textContent='Saving…';
-    const {error}=await sb.auth.updateUser({password:pw});
-    if(error){msg.innerHTML='<div class="msg err">'+error.message+'</div>';btn.disabled=false;btn.textContent='Set password & continue';return;}
-    screenHome();
-  };
+  view.innerHTML='<p class="eyebrow">Welcome</p><h1>Set your password</h1><p class="sub">Choose a password. Next time you just log in with your email and this password.</p><div id="m"></div><div class="card"><label>New password</label><input id="pw" type="password" placeholder="At least 8 characters"/><label>Repeat</label><input id="pw2" type="password" placeholder="Repeat it"/><button class="btn" id="save">Set password &amp; continue</button></div>';
+  document.getElementById('save').onclick=async()=>{var p=pw.value,p2=pw2.value,m=document.getElementById('m');if(p.length<8){m.innerHTML='<div class="msg err">Min 8 characters.</div>';return;}if(p!==p2){m.innerHTML='<div class="msg err">Passwords don\'t match.</div>';return;}var b=document.getElementById('save');b.disabled=true;b.textContent='Saving…';var {error}=await sb.auth.updateUser({password:p});if(error){m.innerHTML='<div class="msg err">'+error.message+'</div>';b.disabled=false;b.textContent='Set password & continue';return;}screenRun();};
 }
-
 function screenLogin(note){
-  view.innerHTML=`
-    <p class="eyebrow">Driver</p><h1>Log in</h1>
-    <p class="sub">Use the email HQ set up for you and your password.</p>
-    <div id="msg">${note?'<div class="msg ok">'+note+'</div>':''}</div>
-    <div class="card">
-      <label>Email</label>
-      <input id="email" type="email" autocomplete="username" placeholder="you@example.com"/>
-      <label>Password</label>
-      <input id="pw" type="password" autocomplete="current-password" placeholder="Your password"/>
-      <button class="btn" id="login">Log in</button>
-    </div>
-    <p class="hint">First time? Open the set-up link HQ sent you to choose a password.</p>`;
-  document.getElementById('login').onclick=async()=>{
-    const email=document.getElementById('email').value.trim(), pw=document.getElementById('pw').value;
-    const msg=document.getElementById('msg');
-    const btn=document.getElementById('login'); btn.disabled=true; btn.textContent='Logging in…';
-    const {error}=await sb.auth.signInWithPassword({email,password:pw});
-    if(error){msg.innerHTML='<div class="msg err">'+error.message+'</div>';btn.disabled=false;btn.textContent='Log in';return;}
-    screenHome();
+  view.innerHTML='<p class="eyebrow">Driver</p><h1>Log in</h1><p class="sub">Use the email HQ set up and your password.</p><div id="m">'+(note?'<div class="msg ok">'+note+'</div>':'')+'</div><div class="card"><label>Email</label><input id="email" type="email" placeholder="you@example.com"/><label>Password</label><input id="pw" type="password" placeholder="Your password"/><button class="btn" id="login">Log in</button></div>';
+  document.getElementById('login').onclick=async()=>{var m=document.getElementById('m'),b=document.getElementById('login');b.disabled=true;b.textContent='Logging in…';var {error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:pw.value});if(error){m.innerHTML='<div class="msg err">'+error.message+'</div>';b.disabled=false;b.textContent='Log in';return;}screenRun();};
+}
+
+/* ---------- the run: my assigned orders today ---------- */
+let RUN=[];
+async function screenRun(){
+  view.innerHTML='<p class="eyebrow">Today</p><h1>My run</h1><div class="card">Loading your orders…</div>';
+  var {data,error}=await sb.rpc('ob_driver_run',{p_store:STORE,p_run_date:today()});
+  if(error){ view.innerHTML='<p class="eyebrow">Today</p><h1>My run</h1><div class="msg err">'+error.message+'</div><button class="btn sec" id="out">Log out</button>'; document.getElementById('out').onclick=logout; return; }
+  RUN=data||[];
+  var rows=RUN.length? RUN.map(function(o){
+    return '<div class="row" data-s="'+o.status+'"><span class="code">'+o.drop_point_id+'</span><span class="who"><div class="n">'+o.order_id+'</div><div class="m">'+(o.customer_name||'')+' · '+(o.items||'')+'</div></span><span class="st">'+o.status+'</span></div>';
+  }).join('') : '<div class="card"><p class="sub" style="margin:0">No orders assigned for today.</p></div>';
+  view.innerHTML='<p class="eyebrow">Today · '+today()+'</p><h1>My run</h1><p class="sub">'+RUN.length+' order(s). Scan a freezer, then scan each bag into it.</p>'+rows+
+    '<button class="btn" id="startScan" style="margin-top:6px">'+svgScan()+' Scan a freezer</button>'+
+    '<button class="btn sec" id="refresh" style="margin-top:10px">Refresh</button>'+
+    '<button class="btn sec" id="out" style="margin-top:10px">Log out</button>';
+  document.getElementById('startScan').onclick=deliverFlow;
+  document.getElementById('refresh').onclick=screenRun;
+  document.getElementById('out').onclick=logout;
+}
+function svgScan(){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>';}
+
+async function deliverFlow(){
+  var f=await scanOnce('Scan the freezer QR');
+  if(!f){ return; }
+  if(f.error){ alert('Camera not available. Use a phone browser with camera access (HTTPS).'); return; }
+  var freezer=f.text.trim();
+  // now scan bags into this freezer, one after another
+  await bagLoop(freezer);
+}
+async function bagLoop(freezer){
+  view.innerHTML='<p class="eyebrow">At freezer</p><h1>'+freezer+'</h1><p class="sub">Scan each bag that goes into this freezer.</p><div id="result"></div>'+
+    '<button class="btn" id="scanBag" style="margin-top:6px">'+svgScan()+' Scan a bag</button>'+
+    '<button class="btn sec" id="doneBags" style="margin-top:10px">Done — back to run</button>';
+  document.getElementById('doneBags').onclick=screenRun;
+  document.getElementById('scanBag').onclick=async function(){
+    var b=await scanOnce('Scan the bag QR');
+    if(!b||b.error){ if(b&&b.error) alert('Camera not available.'); return; }
+    var order=b.text.trim();
+    var {data,error}=await sb.rpc('ob_driver_deliver',{p_store:STORE,p_order:order,p_drop_point:freezer});
+    var R=document.getElementById('result');
+    if(error){ R.innerHTML='<div class="msg err">'+error.message+'</div>'; return; }
+    if(data&&data.ok){ R.innerHTML='<div class="msg ok"><b>'+order+'</b> → in. Status is now ready for collection.</div>'; }
+    else { var why=(data&&data.reason)||'no match'; var extra=data&&data.belongs_to?(' (belongs to '+data.belongs_to+')'):''; R.innerHTML='<div class="msg err"><b>'+order+'</b> — '+why.replace(/_/g,' ')+extra+'. Keep it for the right point.</div>'; }
   };
 }
 
-async function screenHome(){
-  const {data:{user}}=await sb.auth.getUser();
-  view.innerHTML=`
-    <p class="eyebrow">Signed in</p><h1>You're set</h1>
-    <p class="sub">${user?user.email:''} — your driver account is ready. Your delivery run (today's freezers and bags) will appear here.</p>
-    <div class="card">
-      <p style="margin:0 0 14px;color:var(--mut);font-size:13.5px">Next step in the build: your assigned orders for the day, grouped by freezer, with scan-to-stock.</p>
-      <button class="btn" id="out">Log out</button>
-    </div>`;
-  document.getElementById('out').onclick=async()=>{await sb.auth.signOut();screenLogin('Logged out.');};
-}
+async function logout(){ await sb.auth.signOut(); screenLogin('Logged out.'); }
 
+/* ---------- boot ---------- */
 (async ()=>{
-  // if arriving from a set-password / recovery link, Supabase parses the URL hash.
-  const hash=(location.hash||'')+(location.search||'');
-  const isRecovery=/type=recovery|access_token=/.test(hash);
-  await new Promise(r=>setTimeout(r,300)); // let detectSessionInUrl settle
-  const {data:{session}}=await sb.auth.getSession();
-  if(isRecovery && session){ history.replaceState(null,'',location.pathname); return screenSetPassword(); }
-  if(session){ return screenHome(); }
+  var hash=(location.hash||'')+(location.search||'');
+  var isRecovery=/type=recovery|access_token=/.test(hash);
+  await new Promise(r=>setTimeout(r,300));
+  var {data:{session}}=await sb.auth.getSession();
+  if(isRecovery&&session){ history.replaceState(null,'',location.pathname); return screenSetPassword(); }
+  if(session){ return screenRun(); }
   screenLogin();
 })();
 </script>

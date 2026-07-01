@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Ocean Basket — Collect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#faf7f0;--paper2:#f1ece1;--ink:#0a1140;--char:#23262b;--gilt:#1ba8d3;--line:#e4ddcf;--mut:#857f74;
+    --ok:#3f7a5a;--ok-bg:#edf3ee;--pink:#b5573a;--pink-bg:#f6ece7;--max:480px;
+    --serif:'Bodoni Moda',Didot,Georgia,serif;--sans:'Outfit',-apple-system,sans-serif}
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{font-family:var(--sans);background:#0a0a0a;color:var(--char);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{max-width:var(--max);margin:0 auto;min-height:100dvh;background:var(--paper);display:flex;flex-direction:column;box-shadow:0 0 60px rgba(0,0,0,.3)}
+  .topbar{position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px}
+  .topbar .mark{width:24px;height:24px;border-radius:6px;background:linear-gradient(150deg,var(--gilt),#0f6f8c)}
+  .topbar b{font-weight:600;font-size:14.5px}
+  .topbar .role{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.28);border-radius:3px;padding:4px 9px}
+  .body{padding:22px 18px 30px;flex:1}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:var(--mut);font-weight:600;margin:0 0 10px}
+  h1{font-family:var(--serif);font-weight:500;font-size:29px;line-height:1.1;color:var(--ink);margin:2px 0 8px}
+  .sub{color:var(--mut);font-size:14px;margin:0 0 20px} .sub b{color:var(--char)}
+  label{display:block;font-size:12px;font-weight:600;margin:0 0 6px}
+  input{width:100%;font-family:inherit;font-size:15px;padding:13px 14px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-bottom:14px}
+  input:focus{outline:none;border-color:var(--gilt)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--ink);color:#fff;font-family:inherit;font-weight:700;font-size:15px;padding:15px 20px;border-radius:4px;border:1px solid var(--ink);cursor:pointer;letter-spacing:.02em}
+  .btn:active{transform:translateY(1px)} .btn svg{width:18px;height:18px}
+  .btn.sec{background:#fff;color:var(--char);border-color:var(--line);font-weight:600}
+  .gate{text-align:center;border:1px solid var(--line);border-radius:8px;padding:22px 18px;background:#fff}
+  .gate .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.2em;color:var(--mut);font-weight:600}
+  .gate .big{font-family:var(--serif);font-weight:600;font-size:34px;color:var(--ink);margin:8px 0 4px;word-break:break-all}
+  .qrwrap{width:150px;height:150px;margin:14px auto 2px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:10px}
+  .qrwrap svg{width:100%;height:100%}
+  .verdict{border-radius:8px;padding:28px 20px;text-align:center;margin-bottom:14px;border:1px solid}
+  .verdict.go{background:var(--ok-bg);border-color:var(--ok)} .verdict.stop{background:var(--pink-bg);border-color:var(--pink)}
+  .verdict .ico{width:46px;height:46px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center}
+  .verdict.go .ico{background:var(--ok);color:#fff} .verdict.stop .ico{background:var(--pink);color:#fff} .verdict .ico svg{width:24px;height:24px}
+  .verdict .head{font-family:var(--serif);font-weight:500;font-size:23px;margin:0 0 6px} .verdict.go .head{color:var(--ok)} .verdict.stop .head{color:var(--pink)}
+  .verdict .txt{font-size:14px;color:var(--char);opacity:.9;line-height:1.5}
+  .call{margin-top:14px;display:inline-flex;gap:9px;align-items:center;text-decoration:none;background:var(--ink);color:#fff;border-radius:4px;padding:12px 20px;font-weight:700;font-size:15px} .call svg{width:17px;height:17px}
+  #scan{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column} #scan.on{display:flex}
+  #scan video{flex:1;width:100%;object-fit:cover}
+  #scan .frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:66vw;max-width:280px;height:66vw;max-height:280px;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+  #scan .bar{position:absolute;top:0;left:0;right:0;padding:16px 18px;color:#fff;font-weight:600;display:flex;justify-content:space-between;background:linear-gradient(#000a,transparent)}
+  #scan .bar button{background:rgba(255,255,255,.16);border:0;color:#fff;font:600 14px var(--sans);padding:9px 14px;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar"><span class="mark"></span><b>Ocean Basket</b><span class="role">Collect</span></div>
+  <div class="body" id="view"></div>
+</div>
+<div id="scan"><div class="bar"><span>Scan the freezer</span><button id="scanX">Cancel</button></div><video id="scanVid" playsinline></video><div class="frame"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const SUPABASE_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co', SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU', STORE='11111111-1111-1111-1111-111111111111';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:false}});
+const view=document.getElementById('view');
+const I={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',cross:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>',scan:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>'};
+function qrSvg(t){var q=qrcode(0,'M');q.addData(t);q.make();return q.createSvgTag({cellSize:4,margin:0});}
+
+let scanStream=null;
+function stopScan(){document.getElementById('scan').classList.remove('on');if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
+function scanOnce(){return new Promise(async(resolve)=>{var box=document.getElementById('scan'),vid=document.getElementById('scanVid');document.getElementById('scanX').onclick=()=>{stopScan();resolve(null);};box.classList.add('on');try{scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}catch(e){stopScan();resolve({error:1});return;}vid.srcObject=scanStream;await vid.play();var det=('BarcodeDetector' in window)?new window.BarcodeDetector({formats:['qr_code']}):null;var cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});(function tick(){if(!box.classList.contains('on'))return;if(vid.readyState===vid.HAVE_ENOUGH_DATA){cv.width=vid.videoWidth;cv.height=vid.videoHeight;cx.drawImage(vid,0,0,cv.width,cv.height);if(det){det.detect(vid).then(cs=>{if(cs&&cs.length){stopScan();resolve({text:cs[0].rawValue});}}).catch(()=>{});}else{var im=cx.getImageData(0,0,cv.width,cv.height);var r=window.jsQR&&jsQR(im.data,cv.width,cv.height);if(r&&r.data){stopScan();resolve({text:r.data});return;}}}requestAnimationFrame(tick);})();});}
+
+function screenEnter(){
+  var pre=new URLSearchParams(location.search).get('order')||'';
+  view.innerHTML='<p class="eyebrow">Collection</p><h1>Collect your order</h1><p class="sub">Enter your order number, then scan the freezer at your collection point.</p><div class="card"><label>Order number</label><input id="ord" placeholder="OCB-…" value="'+pre+'"/><button class="btn" id="go">Continue</button></div>';
+  document.getElementById('go').onclick=function(){var o=document.getElementById('ord').value.trim();if(o)screenPass(o);};
+  if(pre) screenPass(pre);
+}
+function screenPass(order){
+  view.innerHTML='<p class="eyebrow">Your pass</p><h1>Collect your order</h1><p class="sub">Find your bag <b>'+order+'</b>, then scan the freezer to confirm.</p><div class="gate"><div class="lbl">Your order</div><div class="big">'+order+'</div><div class="qrwrap">'+qrSvg(order)+'</div></div><button class="btn" id="scan" style="margin-top:14px">'+I.scan+' Scan the freezer</button><button class="btn sec" id="back" style="margin-top:10px">Change order</button>';
+  document.getElementById('back').onclick=screenEnter;
+  document.getElementById('scan').onclick=async function(){
+    var r=await scanOnce();
+    if(!r){return;} if(r.error){alert('Camera not available. Use a phone browser over HTTPS.');return;}
+    var freezer=r.text.trim();
+    var {data,error}=await sb.rpc('ob_collect',{p_store:STORE,p_order:order,p_drop_point:freezer});
+    if(error){ result(order,false,error.message); return; }
+    if(data&&data.ok){ result(order,true,data.already?'Already collected.':''); }
+    else { var why=(data&&data.reason||'no match').replace(/_/g,' '); var ex=data&&data.belongs_to?(' (your freezer is '+data.belongs_to+')'):''; result(order,false,why+ex); }
+  };
+}
+function result(order,ok,note){
+  if(ok){ view.innerHTML='<div class="verdict go"><div class="ico">'+I.check+'</div><div class="head">Collected — enjoy</div><div class="txt">'+order+' is confirmed. '+(note||'Take your bag and you\'re done.')+'</div></div><button class="btn sec" id="again">Collect another</button>'; }
+  else { view.innerHTML='<div class="verdict stop"><div class="ico">'+I.cross+'</div><div class="head">Not confirmed</div><div class="txt">'+order+' — '+note+'. Try the correct freezer, or call the online team.</div><a class="call" href="tel:2666666">'+I.phone+' 2666666</a></div><button class="btn sec" id="again" style="margin-top:14px">Back</button>'; }
+  document.getElementById('again').onclick=screenEnter;
+}
+screenEnter();
+</script>
+</body>
+</html>

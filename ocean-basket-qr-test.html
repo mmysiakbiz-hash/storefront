@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Ocean Basket — QR test sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#faf7f0;--ink:#0a1140;--gilt:#1ba8d3;--line:#e4ddcf;--mut:#857f74;--char:#23262b;
+    --serif:'Bodoni Moda',serif;--sans:'Outfit',sans-serif}
+  *{box-sizing:border-box} body{margin:0;background:#0a0a0a;font-family:var(--sans);color:var(--char)}
+  .wrap{max-width:900px;margin:0 auto;padding:24px 18px 60px;background:var(--paper);min-height:100vh}
+  .topbar{background:var(--ink);color:#fff;margin:-24px -18px 22px;padding:14px 18px;display:flex;align-items:center;gap:11px}
+  .topbar .mark{width:24px;height:24px;border-radius:6px;background:linear-gradient(150deg,var(--gilt),#0f6f8c)}
+  .topbar b{font-weight:600;font-size:14.5px}
+  h1{font-family:var(--serif);font-weight:500;font-size:28px;color:var(--ink);margin:0 0 4px}
+  .sub{color:var(--mut);font-size:14px;margin:0 0 24px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .qcard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;text-align:center}
+  .qcard .tag{font-size:11px;text-transform:uppercase;letter-spacing:.18em;color:var(--gilt);font-weight:700;margin-bottom:4px}
+  .qcard h2{font-family:var(--serif);font-weight:500;font-size:20px;color:var(--ink);margin:0 0 3px}
+  .qcard .who{font-size:12.5px;color:var(--mut);margin-bottom:14px;min-height:16px}
+  .qbox{width:190px;height:190px;margin:0 auto;background:#fff;padding:6px}
+  .qbox svg{width:100%;height:100%}
+  .payload{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ink);margin-top:12px;
+    background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:7px 8px;word-break:break-all}
+  .note{margin-top:26px;font-size:12.5px;color:var(--mut);line-height:1.6;border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar"><span class="mark"></span><b>Ocean Basket · QR test sheet</b></div>
+  <h1>Scan these with your phone</h1>
+  <p class="sub" id="sub"></p>
+  <div class="grid" id="grid"></div>
+  <div class="note">
+    Open this on a laptop/second screen. On your phone open the <b>driver app</b> and scan
+    <b>Freezer</b> then <b>Bag</b> (order goes to “ready”). Then open the <b>collect page</b> and scan
+    <b>Freezer</b> (order closes as “collected”). The <b>Customer</b> QR is the customer’s own pass.
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script>
+  var qs=new URLSearchParams(location.search);
+  var ORDER=qs.get('order')||'OCB-L-260701-1023';
+  var FREEZER=qs.get('freezer')||'D01';
+  document.getElementById('sub').textContent='Order '+ORDER+' · Freezer '+FREEZER;
+  var cards=[
+    {tag:'Freezer', title:FREEZER, who:'Drop point — scanned by driver & customer', payload:FREEZER},
+    {tag:'Bag', title:ORDER, who:'Bag sticker — scanned by driver', payload:ORDER},
+    {tag:'Customer', title:ORDER, who:'Customer pass', payload:ORDER},
+  ];
+  function qr(text){var q=qrcode(0,'M');q.addData(text);q.make();return q.createSvgTag({cellSize:5,margin:0});}
+  document.getElementById('grid').innerHTML=cards.map(function(c){
+    return '<div class="qcard"><div class="tag">'+c.tag+'</div><h2>'+c.title+'</h2>'+
+      '<div class="who">'+c.who+'</div><div class="qbox">'+qr(c.payload)+'</div>'+
+      '<div class="payload">'+c.payload+'</div></div>';
+  }).join('');
+</script>
+</body>
+</html>
