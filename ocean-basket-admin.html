@@ -197,7 +197,7 @@ a{color:var(--ink)}
     <button class="on" data-tab="dashboard" onclick="tab('dashboard')">Dashboard</button>
     <button data-tab="scan" onclick="tab('scan')">Scan-In</button>
     <button data-tab="inventory" onclick="tab('inventory')">Online Reserve</button>
-    <button data-tab="orders" onclick="tab('orders')">Order Monitor</button>
+    <button data-tab="orders" onclick="tab('orders')">Order Monitor</button><button data-tab="dispatch" onclick="tab('dispatch');renderDispatch()">Dispatch</button>
     <button data-tab="picklists" onclick="tab('picklists')">Pick &amp; Stickers</button>
     <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
     <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
@@ -213,7 +213,8 @@ a{color:var(--ink)}
     <div class="panel" id="p-routes"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
-    <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
+    <div class="panel" id="p-dispatch"><div style="padding:2px"><h2 style="margin:0 0 3px">Dispatch</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Assign packed orders to a driver for the day. The driver then sees them in “My run”.</p><div id="dispatch-body">Open this tab to load.</div></div></div>
+  <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
   </div>
 </div>
 
@@ -822,6 +823,66 @@ boot();
 })();
 </script>
 <!-- ===================== end Add driver block ===================== -->
+
+
+<style>
+  #p-dispatch .dh{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#857f74;font-weight:700;margin:0 0 10px}
+  #p-dispatch .drow,#p-dispatch .rrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 12px;border:1px solid #e4ddcf;border-radius:8px;background:#fff;margin-bottom:8px}
+  #p-dispatch .oid{font-family:ui-monospace,monospace;font-size:13px;font-weight:600;color:#0a1140}
+  #p-dispatch .odp{font-weight:700;color:#0a1140;min-width:34px}
+  #p-dispatch .ocust{color:#857f74;font-size:13px;flex:1;min-width:80px}
+  #p-dispatch select.dsel,#p-dispatch input.ddate{font:14px 'Outfit',sans-serif;padding:8px 10px;border:1px solid #e4ddcf;border-radius:4px;background:#fff}
+  #p-dispatch button.dassign{background:#0a1140;color:#fff;border:0;border-radius:4px;padding:9px 16px;font:700 13px 'Outfit',sans-serif;cursor:pointer}
+  #p-dispatch .empty{color:#857f74;font-size:13px;padding:10px 2px}
+  #p-dispatch .runcard{border:1px solid #e4ddcf;border-radius:8px;background:#faf7f0;padding:12px;margin-bottom:10px}
+  #p-dispatch .runhead{font-weight:700;color:#0a1140;margin-bottom:8px}
+  #p-dispatch .rst{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;padding:3px 8px;border-radius:3px;border:1px solid #e4ddcf;color:#857f74}
+  #p-dispatch .rst-ready,#p-dispatch .rst-collected{color:#3f7a5a;border-color:#3f7a5a;background:#edf3ee}
+</style>
+<script>
+(function(){
+  function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  window.renderDispatch=async function(){
+    var host=document.getElementById('dispatch-body'); if(!host) return;
+    host.innerHTML='Loading…';
+    var today=todayStr();
+    var drv=await sb.from('ob_staff').select('email,full_name').eq('store_id',STORE_ID).eq('role','driver').eq('active',true);
+    var drivers=(drv.data)||[];
+    if(!drivers.length){ host.innerHTML='<div class="empty">No drivers yet. Create one with the “Add driver” button first.</div>'; return; }
+    var pk=await sb.from('ob_orders').select('*').eq('store_id',STORE_ID).eq('status','packed').order('created_at',{ascending:true});
+    var packed=(pk.data)||[];
+    var as=await sb.from('ob_orders').select('*').eq('store_id',STORE_ID).in('status',['out_for_delivery','ready','collected']).eq('run_date',today);
+    var assigned=(as.data)||[];
+    var opts=drivers.map(function(d){return '<option value="'+d.email+'">'+(d.full_name||d.email)+'</option>';}).join('');
+    var toAssign=packed.length?packed.map(function(o){
+      return '<div class="drow"><span class="oid">'+o.id+'</span><span class="odp">'+(o.drop_point_id||'—')+'</span><span class="ocust">'+(o.customer_name||'')+'</span>'+
+        '<select class="dsel" data-o="'+o.id+'">'+opts+'</select>'+
+        '<input type="date" class="ddate" data-o="'+o.id+'" value="'+today+'"/>'+
+        '<button class="dassign" data-o="'+o.id+'">Assign</button></div>';
+    }).join(''):'<div class="empty">No packed orders waiting.</div>';
+    var byDrv={}; assigned.forEach(function(o){(byDrv[o.assigned_driver]=byDrv[o.assigned_driver]||[]).push(o);});
+    var runs=Object.keys(byDrv).length?Object.keys(byDrv).map(function(em){
+      var name=((drivers.filter(function(d){return d.email===em;})[0])||{}).full_name||em;
+      var rows=byDrv[em].map(function(o){return '<div class="rrow"><span class="oid">'+o.id+'</span><span class="odp">'+(o.drop_point_id||'—')+'</span><span class="rst rst-'+o.status+'">'+o.status+'</span></div>';}).join('');
+      return '<div class="runcard"><div class="runhead">'+name+' · '+byDrv[em].length+' order(s)</div>'+rows+'</div>';
+    }).join(''):'<div class="empty">Nothing assigned for today yet.</div>';
+    host.innerHTML='<h3 class="dh">Packed — waiting to assign</h3>'+toAssign+
+      '<h3 class="dh" style="margin-top:24px">Today\'s runs · '+today+'</h3>'+runs;
+    host.querySelectorAll('.dassign').forEach(function(btn){
+      btn.onclick=async function(){
+        var id=btn.getAttribute('data-o');
+        var email=host.querySelector('.dsel[data-o="'+id+'"]').value;
+        var date=host.querySelector('.ddate[data-o="'+id+'"]').value;
+        btn.disabled=true; btn.textContent='…';
+        var res=await sb.from('ob_orders').update({assigned_driver:email,run_date:date,status:'out_for_delivery'}).eq('id',id).eq('store_id',STORE_ID);
+        if(res.error){ if(window.toast)toast('Error: '+res.error.message); btn.disabled=false; btn.textContent='Assign'; return; }
+        if(window.toast)toast('Assigned '+id+' → '+email);
+        renderDispatch();
+      };
+    });
+  };
+})();
+</script>
 
 </body>
 </html>
