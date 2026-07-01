@@ -4676,6 +4676,21 @@ loadCatalog().then(function(){
   loadUnits();
   if(state.screen==='shop'){ renderCats(); renderSpecies(); }
 }).catch(function(e){ console.warn('Using built-in catalog (offline):', e.message); });
+
+window.addEventListener('load', function(){
+  try{
+    var q=new URLSearchParams(location.search).get('order');
+    if(!q) return;
+    q=q.trim().toUpperCase();
+    if(typeof go==='function') go('orders');
+    if(typeof fetchStatus==='function'){
+      fetchStatus(q).then(function(r){
+        if(r && !r.__missing){ if(typeof saveOrderNo==='function') saveOrderNo(q); if(typeof renderOrders==='function') renderOrders(); }
+      }).catch(function(){});
+    }
+  }catch(e){}
+});
+
 </script>
 </body>
 </html>
