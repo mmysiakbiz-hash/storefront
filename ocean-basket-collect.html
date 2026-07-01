@@ -75,9 +75,9 @@ function screenEnter(){
   if(pre) screenPass(pre);
 }
 function screenPass(order){
-  view.innerHTML='<p class="eyebrow">Your pass</p><h1>Collect your order</h1><p class="sub">Find your bag <b>'+order+'</b>, then scan the freezer to confirm.</p><div class="gate"><div class="lbl">Your order</div><div class="big">'+order+'</div><div class="qrwrap">'+qrSvg(order)+'</div></div><button class="btn" id="scan" style="margin-top:14px">'+I.scan+' Scan the freezer</button><button class="btn sec" id="back" style="margin-top:10px">Change order</button>';
+  view.innerHTML='<p class="eyebrow">Your pass</p><h1>Collect your order</h1><p class="sub">Find your bag <b>'+order+'</b>, then scan the freezer to confirm.</p><div class="gate"><div class="lbl">Your order</div><div class="big">'+order+'</div><div class="qrwrap">'+qrSvg(order)+'</div></div><button class="btn" id="doScan" style="margin-top:14px">'+I.scan+' Scan the freezer</button><button class="btn sec" id="back" style="margin-top:10px">Change order</button>';
   document.getElementById('back').onclick=screenEnter;
-  document.getElementById('scan').onclick=async function(){
+  document.getElementById('doScan').onclick=async function(){
     var r=await scanOnce();
     if(!r){return;} if(r.error){alert('Camera not available. Use a phone browser over HTTPS.');return;}
     var freezer=r.text.trim();
