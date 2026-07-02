@@ -4790,9 +4790,19 @@ window.addEventListener('load', function(){
   async function forgotPw(){
     var v=vals(); msg('');
     if(!v.email){ msg('Enter your email above first.'); return; }
-    var r=await sbc.auth.resetPasswordForEmail(v.email,{redirectTo:location.origin+location.pathname});
-    if(r.error){ msg(errText(r.error)); return; }
-    msg('Check your email for a password-reset link.');
+    try{
+      var r=await sbc.auth.resetPasswordForEmail(v.email,{redirectTo:location.origin+location.pathname});
+      if(r.error){
+        var e=r.error; try{ console.error('OB reset error:', e); }catch(_){}
+        var detail=[e.name,(e.status!=null?('HTTP '+e.status):''),e.code,e.message].filter(Boolean).join(' \u00b7 ');
+        msg(detail||'Reset failed with an empty error \u2014 check Supabase \u2192 Auth \u2192 Logs.');
+        return;
+      }
+      msg('Check your email for a password-reset link.');
+    }catch(err){
+      try{ console.error('OB reset threw:', err); }catch(_){}
+      msg('Reset error: '+((err&&(err.message||err.name))||'network/unknown'));
+    }
   }
   async function setNewPw(){
     var np=((document.getElementById('acct-newpass')||{}).value)||''; msg('');
