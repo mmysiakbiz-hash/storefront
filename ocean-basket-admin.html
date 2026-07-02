@@ -197,7 +197,7 @@ a{color:var(--ink)}
     <button class="on" data-tab="dashboard" onclick="tab('dashboard')">Dashboard</button>
     <button data-tab="scan" onclick="tab('scan')">Scan-In</button>
     <button data-tab="inventory" onclick="tab('inventory')">Online Reserve</button>
-    <button data-tab="orders" onclick="tab('orders')">Order Monitor</button><button data-tab="dispatch" onclick="tab('dispatch');renderDispatch()">Dispatch</button>
+    <button data-tab="orders" onclick="tab('orders')">Order Monitor</button><button data-tab="dispatch" onclick="tab('dispatch');renderDispatch()">Dispatch</button><button data-tab="clients" onclick="tab('clients');renderClients()">Clients</button>
     <button data-tab="picklists" onclick="tab('picklists')">Pick &amp; Stickers</button>
     <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
     <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
@@ -214,6 +214,7 @@ a{color:var(--ink)}
     <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-dispatch"><div style="padding:2px"><h2 style="margin:0 0 3px">Dispatch</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Assign packed orders to a driver for the day. The driver then sees them in “My run”.</p><div id="dispatch-body">Open this tab to load.</div></div></div>
+  <div class="panel" id="p-clients"><div style="padding:2px"><h2 style="margin:0 0 3px">Clients</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Grouped by email — every order, status, spend, and freezer→collection timing.</p><div id="clients-body">Open this tab to load.</div></div></div>
   <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
   </div>
 </div>
@@ -830,6 +831,89 @@ boot();
         renderDispatch();
       };
     });
+  };
+})();
+</script>
+
+
+<style>
+  #p-clients .cl-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  #p-clients .cl-card{flex:1;min-width:120px;border:1px solid #e4ddcf;border-radius:10px;background:#fff;padding:14px}
+  #p-clients .cl-n{font-size:22px;font-weight:800;color:#0a1140}
+  #p-clients .cl-l{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#857f74;margin-top:2px}
+  #p-clients .cl-h{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#857f74;font-weight:700;margin:22px 0 10px}
+  #p-clients .cl-pts{display:flex;gap:8px;flex-wrap:wrap}
+  #p-clients .cl-pt{border:1px solid #e4ddcf;border-radius:8px;background:#faf7f0;padding:8px 12px;font-size:13px;color:#0a1140}
+  #p-clients .cl-mut{color:#857f74;font-weight:400}
+  #p-clients .cl-client{border:1px solid #e4ddcf;border-radius:10px;background:#fff;margin-bottom:8px;overflow:hidden}
+  #p-clients .cl-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;flex-wrap:wrap}
+  #p-clients .cl-head:hover{background:#faf7f0}
+  #p-clients .cl-meta{font-size:12px;color:#857f74}
+  #p-clients .cl-orders{border-top:1px solid #eee6d8;padding:6px 10px 10px}
+  #p-clients .cl-order{display:grid;grid-template-columns:1.6fr .8fr .6fr .9fr .8fr .7fr;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid #f2ece0;font-size:12.5px}
+  #p-clients .cl-order-h{font-weight:700;color:#857f74;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px}
+  #p-clients .cl-oid{font-family:ui-monospace,monospace;color:#0a1140}
+  #p-clients .cl-ost{text-transform:uppercase;font-size:10px;font-weight:700;letter-spacing:.04em;color:#857f74}
+  #p-clients .cl-ost-ready,#p-clients .cl-ost-collected{color:#3f7a5a}
+  #p-clients .cl-ov{font-weight:700;color:#0a1140}
+</style>
+<script>
+(function(){
+  window.renderClients=async function(){
+    var host=document.getElementById('clients-body'); if(!host) return;
+    host.innerHTML='Loading\u2026';
+    var r=await sb.from('ob_orders').select('*').eq('store_id',STORE_ID).order('created_at',{ascending:false}).limit(2000);
+    var orders=(r&&r.data)||[];
+    function durMs(o){ if(o.ready_at && o.collected_at){ var d=new Date(o.collected_at)-new Date(o.ready_at); return d>0?d:null; } return null; }
+    function fmtDur(ms){ if(ms==null) return '\u2014'; var m=Math.round(ms/60000); if(m<60) return m+'m'; var h=Math.floor(m/60); return h+'h '+(m%60)+'m'; }
+    function money(n){ return 'SCR '+Number(n||0).toFixed(0); }
+    function avg(a){ return a.length? a.reduce(function(s,x){return s+x;},0)/a.length : null; }
+    function dstr(s){ return s? new Date(s).toISOString().slice(0,10):''; }
+    var by={};
+    orders.forEach(function(o){
+      var key=((o.email||'').trim().toLowerCase())||'(no email)';
+      var g=by[key]||(by[key]={email:key,name:'',phone:'',orders:[]});
+      g.orders.push(o);
+      if(!g.name && o.customer_name) g.name=o.customer_name;
+      if(!g.phone && o.phone) g.phone=o.phone;
+    });
+    var allDur=[], pointAgg={};
+    orders.forEach(function(o){ var d=durMs(o); if(d!=null){ allDur.push(d); var p=o.drop_point_id||'\u2014'; (pointAgg[p]=pointAgg[p]||[]).push(d); } });
+    var clients=Object.keys(by).map(function(k){return by[k];});
+    clients.sort(function(a,b){ return new Date(b.orders[0].created_at)-new Date(a.orders[0].created_at); });
+    var totalRev=orders.reduce(function(s,o){return s+Number(o.total||0);},0);
+    var summary='<div class="cl-cards">'+
+      '<div class="cl-card"><div class="cl-n">'+clients.length+'</div><div class="cl-l">clients</div></div>'+
+      '<div class="cl-card"><div class="cl-n">'+orders.length+'</div><div class="cl-l">orders</div></div>'+
+      '<div class="cl-card"><div class="cl-n">'+money(totalRev)+'</div><div class="cl-l">revenue</div></div>'+
+      '<div class="cl-card"><div class="cl-n">'+fmtDur(avg(allDur))+'</div><div class="cl-l">avg freezer\u2192collect</div></div>'+
+    '</div>';
+    var pts=Object.keys(pointAgg).sort();
+    var pointTable=pts.length? '<h3 class="cl-h">Avg freezer \u2192 collection by point</h3><div class="cl-pts">'+
+      pts.map(function(p){ return '<div class="cl-pt"><b>'+p+'</b> '+fmtDur(avg(pointAgg[p]))+' <span class="cl-mut">('+pointAgg[p].length+')</span></div>'; }).join('')+'</div>' : '';
+    var list=clients.map(function(g){
+      var rev=g.orders.reduce(function(s,o){return s+Number(o.total||0);},0);
+      var last=g.orders[0];
+      var rows=g.orders.map(function(o){
+        return '<div class="cl-order"><span class="cl-oid">'+o.id+'</span>'+
+          '<span>'+dstr(o.created_at)+'</span>'+
+          '<span>'+(o.drop_point_id||(o.fulfilment==='door'?'door':'\u2014'))+'</span>'+
+          '<span class="cl-ost cl-ost-'+o.status+'">'+o.status+'</span>'+
+          '<span class="cl-ov">'+money(o.total)+'</span>'+
+          '<span>'+fmtDur(durMs(o))+'</span></div>';
+      }).join('');
+      return '<div class="cl-client">'+
+        '<div class="cl-head" onclick="var e=this.nextElementSibling;e.style.display=(e.style.display===\'none\'?\'block\':\'none\')">'+
+          '<div><b>'+(g.name||'(no name)')+'</b> <span class="cl-mut">'+g.email+(g.phone?(' \u00b7 '+g.phone):'')+'</span></div>'+
+          '<div class="cl-meta">'+g.orders.length+' orders \u00b7 '+money(rev)+' \u00b7 last '+dstr(last.created_at)+'</div>'+
+        '</div>'+
+        '<div class="cl-orders" style="display:none">'+
+          '<div class="cl-order cl-order-h"><span>Order</span><span>Date</span><span>Point</span><span>Status</span><span>Total</span><span>Frz\u2192Col</span></div>'+
+          rows+
+        '</div>'+
+      '</div>';
+    }).join('');
+    host.innerHTML=summary+pointTable+'<h3 class="cl-h">Clients ('+clients.length+')</h3>'+(list||'<div class="cl-mut">No orders yet.</div>');
   };
 })();
 </script>
