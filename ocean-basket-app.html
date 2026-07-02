@@ -3469,7 +3469,8 @@ function obSelectToggle(id){
   obSelectCloseAll();
   if(!isOpen){
     var r=btn.getBoundingClientRect();
-    menu.style.position='fixed'; menu.style.right='auto';
+    document.body.appendChild(menu);
+    menu.style.position='fixed'; menu.style.right='auto'; menu.style.zIndex='120';
     menu.style.left=r.left+'px'; menu.style.width=r.width+'px';
     menu.classList.add('open'); btn.classList.add('open'); _obselOpen=id;
     var mh=menu.offsetHeight, below=window.innerHeight-r.bottom;
@@ -3480,7 +3481,7 @@ function obSelectToggle(id){
   }
 }
 function obSelectCloseAll(){
-  document.querySelectorAll('.obsel-menu.open').forEach(function(m){ m.classList.remove('open'); m.style.position=''; m.style.left=''; m.style.right=''; m.style.top=''; m.style.bottom=''; m.style.width=''; });
+  document.querySelectorAll('.obsel-menu.open').forEach(function(m){ m.classList.remove('open'); m.style.position=''; m.style.left=''; m.style.right=''; m.style.top=''; m.style.bottom=''; m.style.width=''; m.style.zIndex=''; var _cid=m.id.replace(/-menu$/,''); var _c=document.getElementById(_cid); if(_c && m.parentNode!==_c) _c.appendChild(m); });
   document.querySelectorAll('.obsel-btn.open').forEach(function(b){ b.classList.remove('open'); });
   var bd=document.getElementById('obsel-bd'); if(bd) bd.remove();
   _obselOpen=null;
