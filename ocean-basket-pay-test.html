@@ -3,103 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ocean Basket · Payment auth test</title>
+<title>Ocean Basket · Payment test</title>
 <style>
   :root{ --navy:#0a1140; --line:#e4ddcf; --bg:#faf7f0; --mut:#857f74; }
   *{ box-sizing:border-box; }
-  body{ margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Outfit,sans-serif; background:var(--bg); color:var(--navy); padding:20px; }
-  .card{ max-width:640px; margin:24px auto; background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px; }
+  body{ margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--navy); padding:20px; }
+  .card{ max-width:680px; margin:20px auto; background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px; }
   h1{ font-size:20px; margin:0 0 6px; }
-  p.sub{ color:var(--mut); font-size:14px; margin:0 0 18px; }
+  h2{ font-size:15px; margin:22px 0 8px; }
+  p.sub{ color:var(--mut); font-size:14px; margin:0 0 16px; }
   label{ font-size:13px; color:var(--mut); display:block; margin:12px 0 4px; }
   input{ width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:9px; font-size:15px; }
-  button{ width:100%; margin-top:16px; background:var(--navy); color:#fff; border:0; border-radius:10px; padding:14px; font-weight:800; font-size:16px; cursor:pointer; }
+  button{ width:100%; margin-top:14px; background:var(--navy); color:#fff; border:0; border-radius:10px; padding:14px; font-weight:800; font-size:16px; cursor:pointer; }
+  button.sec{ background:#fff; border:1px solid var(--navy); color:var(--navy); }
   button:disabled{ opacity:.5; cursor:default; }
-  .verdict{ margin-top:18px; padding:14px; border-radius:10px; font-weight:700; display:none; }
+  .row{ display:flex; gap:12px; } .row > div{ flex:1; }
+  .verdict{ margin-top:16px; padding:14px; border-radius:10px; font-weight:700; display:none; }
   .ok{ background:#edf3ee; border:1px solid #3f7a5a; color:#2f5e46; }
   .bad{ background:#fbeae5; border:1px solid #a8341a; color:#a8341a; }
-  pre{ margin-top:12px; background:#0a1140; color:#e7edf6; padding:12px; border-radius:10px; overflow:auto; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:280px; display:none; }
-  .row{ display:flex; gap:12px; }
-  .row > div{ flex:1; }
+  pre{ margin-top:12px; background:#0a1140; color:#e7edf6; padding:12px; border-radius:10px; overflow:auto; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:240px; display:none; }
+  .hint{ font-size:12.5px; color:var(--mut); background:#f6f3ec; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:12px; }
+  #uc-buttons, #uc-pay{ margin-top:14px; }
 </style>
 </head>
 <body>
   <div class="card">
-    <h1>Payment auth test</h1>
-    <p class="sub">Calls the <b>capture-context</b> endpoint (Cybersource / Unified Checkout). If it returns a JWT, HTTP Signature auth works.</p>
+    <h1>Payment test — Unified Checkout</h1>
+    <p class="sub">Capture context &rarr; load Cybersource SDK &rarr; card form &rarr; transient token.</p>
 
     <div class="row">
-      <div>
-        <label>Amount (SCR)</label>
-        <input id="amt" type="number" value="100" min="1" step="0.01">
-      </div>
-      <div>
-        <label>Order id (optional)</label>
-        <input id="oid" type="text" value="TEST-1">
-      </div>
+      <div><label>Amount (SCR)</label><input id="amt" type="number" value="100" min="1" step="0.01"></div>
+      <div><label>Order id</label><input id="oid" type="text" value="TEST-1"></div>
     </div>
+    <label>Client version</label>
+    <input id="cv" type="text" value="0.28">
     <label>Endpoint</label>
     <input id="url" type="text" value="https://storekit-pi.vercel.app/api/ocean-basket/v2/capture-context">
 
-    <label>Merchant ID override (optional — leave empty to use env)</label>
-    <input id="mid" type="text" placeholder="e.g. barclays_seychelles_dm_acct">
-    <label>Key ID override (optional)</label>
-    <input id="kid" type="text" placeholder="leave empty to use env">
+    <button id="pay">Start payment</button>
+    <button id="cfg" class="sec">Show config (debug &mdash; no secrets)</button>
 
-    <button id="go">Test capture context</button>
-    <button id="cfg" style="background:#fff;border:1px solid var(--navy);color:var(--navy);margin-top:10px">Show config (debug — no secrets)</button>
+    <div class="hint"><b>Test card:</b> 4111 1111 1111 1111 &middot; any future expiry (e.g. 12/30) &middot; any CVV (e.g. 123)</div>
 
     <div id="verdict" class="verdict"></div>
+
+    <h2 id="wtitle" style="display:none">Payment form</h2>
+    <div id="uc-buttons"></div>
+    <div id="uc-pay"></div>
+
     <pre id="out"></pre>
   </div>
 
 <script>
-  var btn=document.getElementById('go');
   var verdict=document.getElementById('verdict');
   var out=document.getElementById('out');
+  var wtitle=document.getElementById('wtitle');
   function show(el){ el.style.display='block'; }
   function hide(el){ el.style.display='none'; }
+  function ok(msg){ verdict.className='verdict ok'; verdict.textContent=msg; show(verdict); }
+  function bad(msg){ verdict.className='verdict bad'; verdict.textContent=msg; show(verdict); }
+  function dump(t){ out.textContent=t; show(out); }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
 
-  btn.onclick=async function(){
-    hide(verdict); hide(out); out.textContent='';
-    btn.disabled=true; btn.textContent='Testing…';
-    var url=document.getElementById('url').value.trim();
-    var amount=Number(document.getElementById('amt').value||0);
-    var orderId=document.getElementById('oid').value.trim();
+  function b64urlToJson(seg){
+    var s=seg.replace(/-/g,'+').replace(/_/g,'/');
+    while(s.length%4) s+='=';
+    return JSON.parse(decodeURIComponent(escape(atob(s))));
+  }
+  function loadScript(src, integrity){
+    return new Promise(function(res,rej){
+      var s=document.createElement('script'); s.src=src;
+      if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; }
+      s.onload=function(){ res(); };
+      s.onerror=function(){ rej(new Error('Failed to load SDK: '+src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  document.getElementById('pay').onclick=async function(){
+    hide(verdict); hide(out); out.textContent=''; hide(wtitle);
+    document.getElementById('uc-buttons').innerHTML='';
+    document.getElementById('uc-pay').innerHTML='';
+    var btn=this; btn.disabled=true; btn.textContent='Loading\u2026';
     try{
-      var r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ amount:amount, orderId:orderId,
-          merchantId: (document.getElementById('mid').value.trim()||undefined),
-          keyId: (document.getElementById('kid').value.trim()||undefined) }) });
-      var text=await r.text();
-      var isJwt = r.ok && text.indexOf('eyJ')===0;
-      if(isJwt){
-        verdict.className='verdict ok';
-        verdict.textContent='✅ AUTH OK — got a capture-context JWT ('+text.length+' chars). HTTP Signature works.';
-        show(verdict);
-        out.textContent='JWT preview:\n'+text.slice(0,140)+' …'; show(out);
-      } else {
-        verdict.className='verdict bad';
-        verdict.textContent='❌ Not a JWT — HTTP '+r.status+'. See details below (copy to Michał / Claude).';
-        show(verdict);
-        out.textContent='HTTP '+r.status+'\n\n'+text.slice(0,1200); show(out);
-      }
+      var r=await fetch(val('url'),{ method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ amount:Number(val('amt')), orderId:val('oid'), clientVersion:val('cv') }) });
+      var cc=await r.text();
+      if(!r.ok || cc.indexOf('eyJ')!==0){ bad('\u274c capture context failed \u2014 HTTP '+r.status); dump(cc.slice(0,1000)); return; }
+
+      var payload=b64urlToJson(cc.split('.')[1]);
+      var ctxData=(payload.ctx && payload.ctx[0] && payload.ctx[0].data) || {};
+      var lib=ctxData.clientLibrary;
+      var integrity=ctxData.clientLibraryIntegrity;
+      if(!lib){ bad('\u274c No clientLibrary URL in the capture context JWT'); dump(JSON.stringify(payload,null,2).slice(0,1200)); return; }
+
+      ok('Capture context OK \u2014 loading payment SDK\u2026');
+      await loadScript(lib, integrity);
+      if(typeof Accept==='undefined'){ bad('\u274c SDK loaded but Accept() is not available'); return; }
+
+      show(wtitle);
+      ok('SDK loaded \u2014 enter the test card below.');
+      var accept=await Accept(cc);
+      var up=await accept.unifiedPayments();
+      var transientToken=await up.show({ containers: { paymentSelection: '#uc-buttons' } });
+
+      ok('\u2705 Got a transient token \u2014 Unified Checkout works! (Next: confirm-payment)');
+      dump('TRANSIENT TOKEN (JWT):\n'+String(transientToken).slice(0,160)+' \u2026\n\nlength: '+String(transientToken).length);
+      window.__lastTransientToken=transientToken;
     }catch(e){
-      verdict.className='verdict bad';
-      verdict.textContent='❌ Request failed (network/CORS): '+(e && e.message ? e.message : e);
-      show(verdict);
+      bad('\u274c '+((e && e.message) || e));
+      try{ if(e) dump(JSON.stringify(e,null,2).slice(0,1000)); }catch(_){}
+    }finally{
+      btn.disabled=false; btn.textContent='Start payment';
     }
-    btn.disabled=false; btn.textContent='Test capture context';
   };
+
   document.getElementById('cfg').onclick=async function(){
     hide(verdict); hide(out); out.textContent='';
-    var url=document.getElementById('url').value.trim();
     try{
-      var r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ debug:true }) });
+      var r=await fetch(val('url'),{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ debug:true }) });
       var j=await r.json();
-      verdict.className='verdict ok'; verdict.textContent='Config (no secret values shown):'; show(verdict);
-      out.textContent=JSON.stringify(j,null,2); show(out);
-    }catch(e){ verdict.className='verdict bad'; verdict.textContent='Config request failed: '+(e&&e.message||e); show(verdict); }
+      ok('Config (no secret values shown):'); dump(JSON.stringify(j,null,2));
+    }catch(e){ bad('Config request failed: '+((e&&e.message)||e)); }
   };
 </script>
 </body>
