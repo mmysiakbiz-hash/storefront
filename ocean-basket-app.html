@@ -4726,6 +4726,7 @@ window.addEventListener('load', function(){
   var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
   function box(){ return document.getElementById('acct-box'); }
   function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
+  function errText(e){ if(!e) return 'Unknown error'; if(typeof e==='string') return e; return e.message||e.error_description||e.msg||(typeof e.error==='string'?e.error:'')||'Something went wrong — please try again.'; }
   function refreshOrders(){ try{ if(typeof renderOrders==='function' && typeof state!=='undefined' && state.screen==='orders') renderOrders(); }catch(e){} }
   function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
   async function render(){
@@ -4775,14 +4776,14 @@ window.addEventListener('load', function(){
     var v=vals(); msg('');
     if(!v.email){ msg('Enter your email above first.'); return; }
     var r=await sbc.auth.resetPasswordForEmail(v.email,{redirectTo:location.origin+location.pathname});
-    if(r.error){ msg(r.error.message); return; }
+    if(r.error){ msg(errText(r.error)); return; }
     msg('Check your email for a password-reset link.');
   }
   async function setNewPw(){
     var np=((document.getElementById('acct-newpass')||{}).value)||''; msg('');
     if(np.length<6){ msg('Password must be at least 6 characters.'); return; }
     var r=await sbc.auth.updateUser({password:np});
-    if(r.error){ msg(r.error.message); return; }
+    if(r.error){ msg(errText(r.error)); return; }
     recoveryMode=false;
     try{ history.replaceState(null,'',location.pathname); }catch(e){}
     render();
@@ -4791,7 +4792,7 @@ window.addEventListener('load', function(){
     var v=vals(); msg('');
     if(!v.email||!v.pass){ msg('Enter email and password.'); return; }
     var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
-    if(r.error){ msg(r.error.message); return; }
+    if(r.error){ msg(errText(r.error)); return; }
     render(); refreshOrders();
   }
   async function signUp(){
@@ -4800,9 +4801,9 @@ window.addEventListener('load', function(){
     try{
       var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:v.email,password:v.pass,name:v.name})});
       var out={}; try{ out=await resp.json(); }catch(e){}
-      if(!out.exists && (!resp.ok || out.error)){ msg(out.error||('Sign-up failed ('+resp.status+')')); return; }
+      if(!out.exists && (!resp.ok || out.error)){ msg(errText(out.error)||('Sign-up failed ('+resp.status+')')); return; }
       var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
-      if(r.error){ msg(out.exists?'This email already has an account — use the correct password, or Sign in.':r.error.message); return; }
+      if(r.error){ msg(out.exists?'This email already has an account — use “Sign in” or “Forgot password?”.':errText(r.error)); return; }
       render();
     }catch(e){ msg('Network error — try again.'); }
   }
