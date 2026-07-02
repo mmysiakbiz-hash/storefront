@@ -4107,7 +4107,7 @@ async function runUnifiedCheckout(order){
   var cr=await fetch(API_BASE+'/confirm-payment',{ method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ transientToken:token, amount:Number(order.total), orderId:order.no }) });
   var cj=await cr.json();
-  if(cj.paid){ order.status='paid'; if(order.__resume){ go('orders'); if(typeof renderOrders==='function') renderOrders(); } else { renderSuccess(order); go('success'); } }
+  if(cj.paid){ order.status = order.__travel ? 'certificate_pending' : 'paid'; if(order.__travel){ if(typeof renderTbDocs==='function') renderTbDocs(); go('tb-collect'); } else if(order.__resume){ go('orders'); if(typeof renderOrders==='function') renderOrders(); } else { renderSuccess(order); go('success'); } }
   else {
     if(msg) msg.textContent='Payment was not completed'+(cj.reason?(' \u2014 '+cj.reason):'')+'. Your order is saved as unpaid; you can try again.';
     var rr=el('pay-retry'); if(rr) rr.style.display='block';
@@ -4600,8 +4600,11 @@ function tbConfirm(){
         if(od.boxes_label) order.boxesLabel=od.boxes_label;
         if(od.service_charge!=null) order.serviceCharge=Number(od.service_charge);
         if(od.certification_charge!=null) order.certCharge=Number(od.certification_charge);
+        if(od.status) order.status=od.status;
         saveOrderNo(order.no); state.orders.unshift(order);
-        state.tb.placedOrder=order; state.tb.items=[]; loadUnits(); renderTbDocs(); go('tb-collect'); return;
+        state.tb.placedOrder=order; state.tb.items=[]; loadUnits();
+        if(state.payMethod==='card' && order.status==='pending_payment'){ btnDone(btn); order.__travel=true; startCardPayment(order); return; }
+        renderTbDocs(); go('tb-collect'); return;
       }
       btnDone(btn);
       toast(res.error?('Could not place order: '+res.error):'Could not place Travel Box order');
