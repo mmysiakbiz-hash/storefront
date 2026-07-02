@@ -4720,6 +4720,8 @@ window.addEventListener('load', function(){
   var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
   var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   window.sbc=sbc;
+  window.OB_STORE='11111111-1111-1111-1111-111111111111';
+  var recoveryMode=false;
   var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
   function box(){ return document.getElementById('acct-box'); }
   function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
