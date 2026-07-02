@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ocean Basket · Payment auth test</title>
+<style>
+  :root{ --navy:#0a1140; --line:#e4ddcf; --bg:#faf7f0; --mut:#857f74; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Outfit,sans-serif; background:var(--bg); color:var(--navy); padding:20px; }
+  .card{ max-width:640px; margin:24px auto; background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px; }
+  h1{ font-size:20px; margin:0 0 6px; }
+  p.sub{ color:var(--mut); font-size:14px; margin:0 0 18px; }
+  label{ font-size:13px; color:var(--mut); display:block; margin:12px 0 4px; }
+  input{ width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:9px; font-size:15px; }
+  button{ width:100%; margin-top:16px; background:var(--navy); color:#fff; border:0; border-radius:10px; padding:14px; font-weight:800; font-size:16px; cursor:pointer; }
+  button:disabled{ opacity:.5; cursor:default; }
+  .verdict{ margin-top:18px; padding:14px; border-radius:10px; font-weight:700; display:none; }
+  .ok{ background:#edf3ee; border:1px solid #3f7a5a; color:#2f5e46; }
+  .bad{ background:#fbeae5; border:1px solid #a8341a; color:#a8341a; }
+  pre{ margin-top:12px; background:#0a1140; color:#e7edf6; padding:12px; border-radius:10px; overflow:auto; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:280px; display:none; }
+  .row{ display:flex; gap:12px; }
+  .row > div{ flex:1; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Payment auth test</h1>
+    <p class="sub">Calls the <b>capture-context</b> endpoint (Cybersource / Unified Checkout). If it returns a JWT, HTTP Signature auth works.</p>
+
+    <div class="row">
+      <div>
+        <label>Amount (SCR)</label>
+        <input id="amt" type="number" value="100" min="1" step="0.01">
+      </div>
+      <div>
+        <label>Order id (optional)</label>
+        <input id="oid" type="text" value="TEST-1">
+      </div>
+    </div>
+    <label>Endpoint</label>
+    <input id="url" type="text" value="https://storekit-pi.vercel.app/api/ocean-basket/v2/capture-context">
+
+    <button id="go">Test capture context</button>
+
+    <div id="verdict" class="verdict"></div>
+    <pre id="out"></pre>
+  </div>
+
+<script>
+  var btn=document.getElementById('go');
+  var verdict=document.getElementById('verdict');
+  var out=document.getElementById('out');
+  function show(el){ el.style.display='block'; }
+  function hide(el){ el.style.display='none'; }
+
+  btn.onclick=async function(){
+    hide(verdict); hide(out); out.textContent='';
+    btn.disabled=true; btn.textContent='Testing…';
+    var url=document.getElementById('url').value.trim();
+    var amount=Number(document.getElementById('amt').value||0);
+    var orderId=document.getElementById('oid').value.trim();
+    try{
+      var r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ amount:amount, orderId:orderId }) });
+      var text=await r.text();
+      var isJwt = r.ok && text.indexOf('eyJ')===0;
+      if(isJwt){
+        verdict.className='verdict ok';
+        verdict.textContent='✅ AUTH OK — got a capture-context JWT ('+text.length+' chars). HTTP Signature works.';
+        show(verdict);
+        out.textContent='JWT preview:\n'+text.slice(0,140)+' …'; show(out);
+      } else {
+        verdict.className='verdict bad';
+        verdict.textContent='❌ Not a JWT — HTTP '+r.status+'. See details below (copy to Michał / Claude).';
+        show(verdict);
+        out.textContent='HTTP '+r.status+'\n\n'+text.slice(0,1200); show(out);
+      }
+    }catch(e){
+      verdict.className='verdict bad';
+      verdict.textContent='❌ Request failed (network/CORS): '+(e && e.message ? e.message : e);
+      show(verdict);
+    }
+    btn.disabled=false; btn.textContent='Test capture context';
+  };
+</script>
+</body>
+</html>
