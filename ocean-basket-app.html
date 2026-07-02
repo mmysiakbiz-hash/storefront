@@ -3128,7 +3128,7 @@ function fetchStatus(no){
       if(!d) return null;
       if(d.__missing) return d;
       var o=d.order||{};
-      return { order_no:o.id, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment,
+      return { order_no:o.id, created_at:o.created_at, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment,
                drop_point_id:o.drop_point_id, door_code:o.door_code, shop_id:o.shop_id,
                boxes_label:o.boxes_label, status:o.status, items:d.items||[] };
     })
@@ -4113,16 +4113,30 @@ function lookupOrder(){
     saveOrderNo(code); inp.value=''; renderOrders();
   }).catch(function(){ inp.disabled=false; toast('Could not check \u2014 connection problem.'); }).finally(function(){ btnDone(_b); });
 }
-function renderOrders(){
+async function renderOrders(){
   var host=el('orders-host');
+  host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px"><div class="muted" style="font-size:13px">Loading\u2026</div></div>';
   var nos = savedOrderNos();
-  host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px">'+(nos.length?'<div class="muted" style="font-size:13px">Loading\u2026</div>':emptyOrdersHTML())+'</div>';
-  if(!nos.length) return;
-  Promise.all(nos.map(function(no){ return fetchStatus(no); })).then(function(results){
+  var acct=[];
+  try{
+    if(window.sbc){
+      var s=await window.sbc.auth.getSession();
+      if(s && s.data && s.data.session){
+        var rr=await window.sbc.rpc('ob_my_orders',{p_store:window.OB_STORE});
+        if(rr && rr.data){ acct=rr.data.map(function(o){ return { order_no:o.id, created_at:o.created_at, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment, drop_point_id:o.drop_point_id, door_code:o.door_code, shop_id:o.shop_id, boxes_label:o.boxes_label, status:o.status, items:[] }; }); }
+      }
+    }
+  }catch(e){}
+  var dev=[];
+  if(nos.length){
+    var results=await Promise.all(nos.map(function(no){ return fetchStatus(no); }));
     results.forEach(function(r){ if(r && r.__missing){ pruneOrderNo(r.__missing); } });
-    var live=results.filter(function(r){ return r && !r.__missing; });
-    el('orders-live').innerHTML = live.length ? live.map(orderCardLive).join('') : emptyOrdersHTML();
-  });
+    dev=results.filter(function(r){ return r && !r.__missing; });
+  }
+  var seen={}, all=[];
+  acct.concat(dev).forEach(function(o){ if(o && o.order_no && !seen[o.order_no]){ seen[o.order_no]=1; all.push(o); } });
+  all.sort(function(a,b){ return new Date(b.created_at||0)-new Date(a.created_at||0); });
+  var oh=el('orders-live'); if(oh){ oh.innerHTML = all.length ? all.map(orderCardLive).join('') : emptyOrdersHTML(); }
 }
 function orderWhereLive(o){
   if(o.type==='travel'){ var sh=SHOPS.filter(function(x){return x.id===o.shop_id;})[0]; return 'Travel Box'+(o.boxes_label?(' \u00b7 '+o.boxes_label):'')+(sh?(' \u00b7 '+sh.name):''); }
@@ -4701,7 +4715,8 @@ window.addEventListener('load', function(){
   var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
   var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
   var sbc=window.supabase.createClient(SB_URL, SB_ANON, {auth:{detectSessionInUrl:true, flowType:'implicit', persistSession:true, autoRefreshToken:true}});
-  window.sbc=sbc; window.authEmail=null;
+  window.sbc=sbc;
+  window.OB_STORE='11111111-1111-1111-1111-111111111111'; window.authEmail=null;
   var REDIRECT=location.origin+location.pathname;
   function esc(s){ return String(s||'').replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
   window.renderAuthUI=async function(){
@@ -4756,6 +4771,7 @@ window.addEventListener('load', function(){
   var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
   function box(){ return document.getElementById('acct-box'); }
   function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
+  function refreshOrders(){ try{ if(typeof renderOrders==='function' && typeof state!=='undefined' && state.screen==='orders') renderOrders(); }catch(e){} }
   function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
   async function render(){
     var b=box(); if(!b) return;
@@ -4768,7 +4784,7 @@ window.addEventListener('load', function(){
         '<div style="font-weight:700;color:#0a1140;margin:2px 0 12px;word-break:break-all">'+email+'</div>'+
         '<button id="acct-out" style="background:#fff;border:1px solid #e4ddcf;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer">Log out</button>'+
       '</div>';
-      document.getElementById('acct-out').onclick=async function(){ await sbc.auth.signOut(); render(); };
+      document.getElementById('acct-out').onclick=async function(){ await sbc.auth.signOut(); render(); refreshOrders(); };
       var hh=document.querySelector('#s-profile .prof-head h2'); if(hh && email) hh.textContent=email.split('@')[0];
     } else {
       b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
@@ -4792,7 +4808,7 @@ window.addEventListener('load', function(){
     if(!v.email||!v.pass){ msg('Enter email and password.'); return; }
     var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
     if(r.error){ msg(r.error.message); return; }
-    render();
+    render(); refreshOrders();
   }
   async function signUp(){
     var v=vals(); msg('');
