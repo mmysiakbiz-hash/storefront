@@ -4073,6 +4073,7 @@ function saveConfirmation(){
 }
 function b64urlToJson(seg){ var s=seg.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return JSON.parse(decodeURIComponent(escape(atob(s)))); }
 function obLoadPaySdk(src,integrity){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; } s.onload=function(){res();}; s.onerror=function(){rej(new Error('Could not load the secure payment library'));}; document.head.appendChild(s); }); }
+function payPending(no,total){ startCardPayment({ no:no, total:Number(total||0), status:'pending_payment', __resume:true }); }
 function startCardPayment(order){
   go('pay');
   var host=el('pay-host');
@@ -4105,7 +4106,7 @@ async function runUnifiedCheckout(order){
   var cr=await fetch(API_BASE+'/confirm-payment',{ method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ transientToken:token, amount:Number(order.total), orderId:order.no }) });
   var cj=await cr.json();
-  if(cj.paid){ order.status='paid'; renderSuccess(order); go('success'); }
+  if(cj.paid){ order.status='paid'; if(order.__resume){ go('orders'); if(typeof renderOrders==='function') renderOrders(); } else { renderSuccess(order); go('success'); } }
   else {
     if(msg) msg.textContent='Payment was not completed'+(cj.reason?(' \u2014 '+cj.reason):'')+'. Your order is saved as unpaid; you can try again.';
     var rr=el('pay-retry'); if(rr) rr.style.display='block';
@@ -4199,13 +4200,14 @@ function orderCardLive(o){
   }).join('');
   var statLabel = cancelled ? o.status : (o.status==='certificate_pending' ? 'Certificate pending' : STATUS_FLOW[idx].label);
   var isColl=(o.type!=='travel' && o.fulfilment!=='door' && o.drop_point_id);
+  var payCTA=(o.status==='pending_payment') ? '<div style="margin-top:16px;padding:14px;border:1px solid #a8341a;background:#fbeae5;border-radius:12px;text-align:center"><div style="font-weight:800;color:#a8341a;margin-bottom:8px">Payment not completed</div><button class="btn" onclick="payPending(\''+o.order_no+'\','+Number(o.total||0)+')">Complete payment</button></div>' : '';
   var readyCTA=(o.status==='ready' && isColl) ? '<div style="margin-top:16px;padding:16px;border:1px solid #3f7a5a;background:#edf3ee;border-radius:12px;text-align:center">'+'<div style="font-weight:800;color:#2f5e46;margin-bottom:4px">Ready for collection</div>'+'<div style="font-size:13px;color:#4a6b58;margin-bottom:13px">Your order is in freezer '+o.drop_point_id+' at the collection point. Scan at the freezer to confirm pickup.</div>'+'<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:#0a1140;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">Scan to collect</a>'+'</div>' : '';
   return '<div class="track-card">'+
     '<div class="track-head"><div><div class="track-no">'+o.order_no+'</div>'+
       '<div class="track-meta">'+money2(o.total)+' \u00b7 '+orderWhereLive(o)+'</div></div>'+
       '<div class="track-stat">'+statLabel+'</div></div>'+
       (cancelled ? '<div class="info-banner" style="background:#fbeae5;border-color:#f0c4b8;color:#a8341a;margin-top:12px">This order was '+o.status+'.</div>'
-                 : '<div class="timeline" style="margin-top:14px">'+steps+'</div>')+ readyCTA +
+                 : '<div class="timeline" style="margin-top:14px">'+steps+'</div>')+ readyCTA + payCTA +
   '</div>';
 }
 function orderCardLocal(o){

@@ -886,6 +886,7 @@ boot();
     function topN(c,n){ return Object.keys(c).sort(function(a,b){return c[b]-c[a];}).slice(0,n); }
     var DORMANT_DAYS=60;
 
+    function isRev(o){ return ['paid','certificate_pending','preparing','packed','out_for_delivery','ready','collected','completed'].indexOf(o.status)>=0; }
     var by={};
     orders.forEach(function(o){
       var key=((o.email||'').trim().toLowerCase())||'(no email)';
@@ -907,8 +908,8 @@ boot();
     var clients=Object.keys(by).map(function(k){ return by[k]; });
     clients.forEach(function(g){
       var os=g.orders.slice().sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); }); // asc
-      g.rev=os.reduce(function(s,o){return s+Number(o.total||0);},0);
-      g.count=os.length; g.aov=g.count? g.rev/g.count:0;
+      var _rev=os.filter(isRev); g.rev=_rev.reduce(function(s,o){return s+Number(o.total||0);},0); g.revCount=_rev.length;
+      g.count=os.length; g.aov=g.revCount? g.rev/g.revCount:0;
       g.first=os[0].created_at; g.last=os[os.length-1].created_at;
       g.daysSinceLast=daysSince(g.last);
       g.returning=g.count>1;
@@ -927,8 +928,8 @@ boot();
       avg:function(a,b){return b.aov-a.aov;}, dormant:function(a,b){return (b.daysSinceLast||0)-(a.daysSinceLast||0);} };
     clients.sort(cmp[sortKey]||cmp.recent);
 
-    var totalRev=orders.reduce(function(s,o){return s+Number(o.total||0);},0);
-    var avgOrder=orders.length? totalRev/orders.length:0;
+    var _allRev=orders.filter(isRev); var totalRev=_allRev.reduce(function(s,o){return s+Number(o.total||0);},0);
+    var avgOrder=_allRev.length? totalRev/_allRev.length:0;
     var nNew=clients.filter(function(g){return !g.returning;}).length;
     var nRet=clients.filter(function(g){return g.returning;}).length;
     var nDorm=clients.filter(function(g){return g.dormant;}).length;
