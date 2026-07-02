@@ -4718,7 +4718,7 @@ window.addEventListener('load', function(){
   if(!window.supabase) return;
   var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
   var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
-  var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   window.sbc=sbc;
   var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
   function box(){ return document.getElementById('acct-box'); }
@@ -4727,6 +4727,15 @@ window.addEventListener('load', function(){
   function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
   async function render(){
     var b=box(); if(!b) return;
+    if(recoveryMode){
+      b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
+        '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Set a new password</div>'+
+        '<input id="acct-newpass" type="password" placeholder="New password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+        '<div id="acct-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
+        '<button id="acct-setpw" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Update password</button>'+
+      '</div>';
+      document.getElementById('acct-setpw').onclick=setNewPw; return;
+    }
     var s=await sbc.auth.getSession();
     var sess=s&&s.data&&s.data.session;
     if(sess){
@@ -4750,10 +4759,28 @@ window.addEventListener('load', function(){
           '<button id="acct-signup" style="flex:1;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Create account</button>'+
           '<button id="acct-signin" style="flex:1;background:#fff;border:1px solid #0a1140;color:#0a1140;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Sign in</button>'+
         '</div>'+
+        '<div style="margin-top:10px;text-align:center"><a href="#" id="acct-forgot" style="font-size:13px;color:#1e6e8c;text-decoration:none">Forgot password?</a></div>'+
       '</div>';
       document.getElementById('acct-signup').onclick=signUp;
       document.getElementById('acct-signin').onclick=signIn;
+      var _fp=document.getElementById('acct-forgot'); if(_fp) _fp.onclick=function(e){ e.preventDefault(); forgotPw(); };
     }
+  }
+  async function forgotPw(){
+    var v=vals(); msg('');
+    if(!v.email){ msg('Enter your email above first.'); return; }
+    var r=await sbc.auth.resetPasswordForEmail(v.email,{redirectTo:location.origin+location.pathname});
+    if(r.error){ msg(r.error.message); return; }
+    msg('Check your email for a password-reset link.');
+  }
+  async function setNewPw(){
+    var np=((document.getElementById('acct-newpass')||{}).value)||''; msg('');
+    if(np.length<6){ msg('Password must be at least 6 characters.'); return; }
+    var r=await sbc.auth.updateUser({password:np});
+    if(r.error){ msg(r.error.message); return; }
+    recoveryMode=false;
+    try{ history.replaceState(null,'',location.pathname); }catch(e){}
+    render();
   }
   async function signIn(){
     var v=vals(); msg('');
@@ -4774,6 +4801,7 @@ window.addEventListener('load', function(){
       render();
     }catch(e){ msg('Network error — try again.'); }
   }
+  sbc.auth.onAuthStateChange(function(evt){ if(evt==='PASSWORD_RECOVERY'){ recoveryMode=true; if(typeof go==='function') go('profile'); render(); } });
   window.obAccountRender=render;
   if(document.readyState!=='loading') render(); else window.addEventListener('load',render);
 })();
