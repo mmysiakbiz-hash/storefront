@@ -4073,6 +4073,7 @@ function saveConfirmation(){
 }
 function b64urlToJson(seg){ var s=seg.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return JSON.parse(decodeURIComponent(escape(atob(s)))); }
 function obLoadPaySdk(src,integrity){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; } s.onload=function(){res();}; s.onerror=function(){rej(new Error('Could not load the secure payment library'));}; document.head.appendChild(s); }); }
+function cancelUnpaid(no){ if(!no) return; fetch(API_BASE+'/cancel-unpaid',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ orderId:no }) }).then(function(r){ return r.json(); }).then(function(){ toast('Order cancelled'); go('orders'); if(typeof renderOrders==='function') renderOrders(); }).catch(function(){ go('orders'); }); }
 function payPending(no,total){ startCardPayment({ no:no, total:Number(total||0), status:'pending_payment', __resume:true }); }
 function startCardPayment(order){
   go('pay');
@@ -4080,7 +4081,7 @@ function startCardPayment(order){
   host.innerHTML='<div class="pad"><h2 style="margin:0 0 4px">Pay SCR '+Number(order.total).toFixed(2)+'</h2>'+
     '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px">Loading secure payment\u2026</div>'+
     '<div id="ob-uc-buttons"></div>'+
-    '<div id="pay-retry" style="display:none;margin-top:14px"><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div></div>';
+    '<div id="pay-retry" style="display:none;margin-top:14px"><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
   window.__payOrder=order;
   runUnifiedCheckout(order).catch(function(e){
     var m=el('pay-msg'); if(m){ m.textContent='Payment could not start: '+((e&&e.message)||e); }
