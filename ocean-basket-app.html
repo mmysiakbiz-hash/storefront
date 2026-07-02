@@ -3921,6 +3921,7 @@ function renderPayment(){
   var doorCode = state.fulfil==='delivery' ? (deliveryFee===0?'GOLD':'SILVER') : null;
   var total=sub+deliveryFee;
   var c=state.customer;
+  if(window.OB_USER && window.OB_USER.email){ c.email=window.OB_USER.email; if(!c.name && window.OB_USER.name) c.name=window.OB_USER.name; }
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
 
   var addressFields = state.fulfil==='delivery'
@@ -3934,7 +3935,7 @@ function renderPayment(){
   }).join('');
 
   el('payment-host').innerHTML='<div class="pad">'+
-    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+
+    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'')+
     '<div class="field"><label>Full name</label><input id="f-name" oninput="state.customer.name=this.value" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
     '<div class="field"><label>Phone (WhatsApp)</label><input id="f-phone" oninput="state.customer.phone=this.value" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
     '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+
@@ -3961,7 +3962,7 @@ function placeOrder(){
   var phone=el('f-phone').value.trim();
   if(!name||!phone){ toast('Please add your name and phone'); return; }
   state.customer.name=name; state.customer.phone=phone;
-  state.customer.email=el('f-email')?el('f-email').value.trim():'';
+  state.customer.email=(window.OB_USER&&window.OB_USER.email)?window.OB_USER.email:(el('f-email')?el('f-email').value.trim():'');
   if(el('f-address')) state.customer.address=el('f-address').value.trim();
   if(state.fulfil==='delivery' && !state.customer.address){ toast('Please add a delivery address'); return; }
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
@@ -4093,6 +4094,7 @@ function renderSuccess(order){
     '<button class="btn" style="margin-top:6px" onclick="go(\'orders\')">View my orders</button>'+
     '<button class="btn ghost" style="margin-top:10px" onclick="go(\'shop\')">Order more fish</button>'+
   '</div>';
+  if(window.obSuccessAccount){ try{ window.obSuccessAccount((state.customer&&state.customer.email)||(order&&order.email)||''); }catch(e){} }
 }
 /* ---------- ORDERS ---------- */
 function emptyOrdersHTML(){
@@ -4760,6 +4762,7 @@ window.addEventListener('load', function(){
     var sess=s&&s.data&&s.data.session;
     if(sess){
       var email=sess.user.email;
+      window.OB_USER={email:email,name:((sess.user.user_metadata&&sess.user.user_metadata.name)||'')};
       b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
         '<div style="font-size:12px;color:#857f74">Signed in as</div>'+
         '<div style="font-weight:700;color:#0a1140;margin:2px 0 12px;word-break:break-all">'+email+'</div>'+
@@ -4781,6 +4784,7 @@ window.addEventListener('load', function(){
         '</div>'+
         '<div style="margin-top:10px;text-align:center"><a href="#" id="acct-forgot" style="font-size:13px;color:#1e6e8c;text-decoration:none">Forgot password?</a></div>'+
       '</div>';
+      window.OB_USER=null;
       document.getElementById('acct-signup').onclick=signUp;
       document.getElementById('acct-signin').onclick=signIn;
       var _fp=document.getElementById('acct-forgot'); if(_fp) _fp.onclick=function(e){ e.preventDefault(); forgotMode=true; render(); };
@@ -4833,6 +4837,38 @@ window.addEventListener('load', function(){
     }catch(e){ msg('Network error — try again.'); }
   }
   sbc.auth.onAuthStateChange(function(evt){ if(evt==='PASSWORD_RECOVERY'){ recoveryMode=true; if(typeof go==='function') go('account'); render(); } });
+  window.obSuccessAccount=async function(pemail){
+    var email=(pemail||'').trim().toLowerCase();
+    var host=document.getElementById('success-host'); if(!host||!email) return;
+    try{ var s=await sbc.auth.getSession(); if(s&&s.data&&s.data.session) return; }catch(e){}
+    if(document.getElementById('succ-acct')) return;
+    var wrap=document.createElement('div'); wrap.id='succ-acct';
+    wrap.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:16px;margin:14px 16px">'+
+      '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Save this order to an account (optional)</div>'+
+      '<div style="font-size:13px;color:#857f74;margin-bottom:10px">Your order is already saved on this device \u2014 track it any time under <b>Orders</b>. Create a free account with <b>'+email+'</b> to also:</div>'+
+      '<ul style="margin:0 0 12px 18px;padding:0;font-size:13px;color:#5b5750;line-height:1.5"><li>track your orders from <b>any device</b></li><li>collect <b>loyalty rewards</b> on your purchases</li></ul>'+
+      '<input id="succ-pass" type="password" placeholder="Choose a password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+      '<div id="succ-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button id="succ-create" style="flex:1;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Create account</button>'+
+        '<button id="succ-skip" style="background:#fff;border:1px solid #e4ddcf;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer">No thanks</button>'+
+      '</div></div>';
+    host.appendChild(wrap);
+    document.getElementById('succ-skip').onclick=function(){ var w=document.getElementById('succ-acct'); if(w) w.remove(); };
+    document.getElementById('succ-create').onclick=async function(){
+      var pass=((document.getElementById('succ-pass')||{}).value)||''; var m=document.getElementById('succ-msg');
+      if(pass.length<6){ if(m) m.textContent='Password must be at least 6 characters.'; return; }
+      try{
+        var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pass,name:((typeof state!=='undefined'&&state.customer&&state.customer.name)||'')})});
+        var out={}; try{ out=await resp.json(); }catch(e){}
+        var r=await sbc.auth.signInWithPassword({email:email,password:pass});
+        if(r.error){ if(m) m.textContent=out.exists?'This email already has an account \u2014 sign in from Profile \u2192 Account.':(errText(r.error)||'Could not create account.'); return; }
+        var w=document.getElementById('succ-acct');
+        if(w) w.innerHTML='<div style="background:#edf3ee;border:1px solid #3f7a5a;border-radius:12px;padding:16px;margin:14px 16px;color:#2f5e46;font-weight:700">Account created \u2014 your orders now sync across devices.</div>';
+        if(typeof window.obAccountRender==='function') window.obAccountRender();
+      }catch(e){ if(m) m.textContent='Network error \u2014 try again.'; }
+    };
+  };
   window.obAccountRender=render;
   if(document.readyState!=='loading') render(); else window.addEventListener('load',render);
 })();
