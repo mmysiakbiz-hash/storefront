@@ -2984,7 +2984,8 @@ try{window.qrcode=module.exports;}catch(e){}})();
   </section>
 
   <!-- ============ PROFILE ============ -->
-  <section class="screen" id="s-profile"><div id="acct-box" style="padding:0 16px"></div>
+  <section class="screen" id="s-account"><div class="topbar"><button class="back" onclick="go('profile')" data-ic="back"></button><h2>Account</h2></div><div id="acct-box" style="padding:0 16px 16px"></div></section>
+  <section class="screen" id="s-profile">
     <div class="prof-head">
       <div class="av" data-ic="profile"></div>
       <h2>Guest</h2>
@@ -2992,6 +2993,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
     </div>
     
     <div class="prof-list">
+      <button class="prof-row" onclick="go('account')"><span class="pico" data-ic="profile"></span><span class="pt">Account</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('orders')"><span class="pico" data-ic="orders"></span><span class="pt">My orders</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('map')"><span class="pico" data-ic="pin"></span><span class="pt">Collection points</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
@@ -3399,7 +3401,7 @@ function go(screen){
   var node = el('s-'+screen);
   if(node){ node.classList.add('active'); }
   // bottom nav highlight
-  var navMap = {home:'home',shop:'shop',product:'shop',cart:'cart',delivery:'cart',map:'cart',payment:'cart',success:'cart',orders:'orders',profile:'profile','tb-home':'home','tb-flight':'home','tb-shop':'home','tb-box':'home','tb-collect':'home','tb-success':'home','support':'home'};
+  var navMap = {home:'home',shop:'shop',product:'shop',cart:'cart',delivery:'cart',map:'cart',payment:'cart',success:'cart',orders:'orders',profile:'profile',account:'profile','tb-home':'home','tb-flight':'home','tb-shop':'home','tb-box':'home','tb-collect':'home','tb-success':'home','support':'home'};
   document.querySelectorAll('#bottomnav button').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-nav')===navMap[screen]);
   });
@@ -4722,7 +4724,7 @@ window.addEventListener('load', function(){
   var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   window.sbc=sbc;
   window.OB_STORE='11111111-1111-1111-1111-111111111111';
-  var recoveryMode=false;
+  var recoveryMode=false, forgotMode=false;
   var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
   function box(){ return document.getElementById('acct-box'); }
   function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
@@ -4740,6 +4742,19 @@ window.addEventListener('load', function(){
         '<button id="acct-setpw" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Update password</button>'+
       '</div>';
       document.getElementById('acct-setpw').onclick=setNewPw; return;
+    }
+    if(forgotMode){
+      b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
+        '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Reset password</div>'+
+        '<div style="font-size:13px;color:#857f74;margin-bottom:12px">Enter your email and we\'ll send you a link to set a new password.</div>'+
+        '<input id="acct-email" type="email" autocomplete="email" placeholder="Email" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+        '<div id="acct-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
+        '<button id="acct-sendreset" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Send reset link</button>'+
+        '<div style="margin-top:10px;text-align:center"><a href="#" id="acct-back" style="font-size:13px;color:#1e6e8c;text-decoration:none">\u2190 Back</a></div>'+
+      '</div>';
+      document.getElementById('acct-sendreset').onclick=forgotPw;
+      document.getElementById('acct-back').onclick=function(e){ e.preventDefault(); forgotMode=false; render(); };
+      return;
     }
     var s=await sbc.auth.getSession();
     var sess=s&&s.data&&s.data.session;
@@ -4768,7 +4783,7 @@ window.addEventListener('load', function(){
       '</div>';
       document.getElementById('acct-signup').onclick=signUp;
       document.getElementById('acct-signin').onclick=signIn;
-      var _fp=document.getElementById('acct-forgot'); if(_fp) _fp.onclick=function(e){ e.preventDefault(); forgotPw(); };
+      var _fp=document.getElementById('acct-forgot'); if(_fp) _fp.onclick=function(e){ e.preventDefault(); forgotMode=true; render(); };
     }
     }catch(err){ b.innerHTML='<div style="padding:12px;color:#a8341a;font-size:13px;background:#fff;border:1px solid #e4ddcf;border-radius:12px;margin:8px 0">Account error: '+((err&&err.message)||err)+'</div>'; }
   }
@@ -4807,7 +4822,7 @@ window.addEventListener('load', function(){
       render();
     }catch(e){ msg('Network error — try again.'); }
   }
-  sbc.auth.onAuthStateChange(function(evt){ if(evt==='PASSWORD_RECOVERY'){ recoveryMode=true; if(typeof go==='function') go('profile'); render(); } });
+  sbc.auth.onAuthStateChange(function(evt){ if(evt==='PASSWORD_RECOVERY'){ recoveryMode=true; if(typeof go==='function') go('account'); render(); } });
   window.obAccountRender=render;
   if(document.readyState!=='loading') render(); else window.addEventListener('load',render);
 })();
