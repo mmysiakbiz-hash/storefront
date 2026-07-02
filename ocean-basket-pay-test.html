@@ -107,9 +107,18 @@
       var up=await accept.unifiedPayments();
       var transientToken=await up.show({ containers: { paymentSelection: '#uc-buttons' } });
 
-      ok('\u2705 Got a transient token \u2014 Unified Checkout works! (Next: confirm-payment)');
-      dump('TRANSIENT TOKEN (JWT):\n'+String(transientToken).slice(0,160)+' \u2026\n\nlength: '+String(transientToken).length);
       window.__lastTransientToken=transientToken;
+      ok('Got a transient token \u2014 confirming payment\u2026');
+      var confirmUrl=val('url').replace('capture-context','confirm-payment');
+      var cr=await fetch(confirmUrl,{ method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ transientToken:transientToken, amount:Number(val('amt')), orderId:val('oid') }) });
+      var cj=await cr.json();
+      if(cj.paid){
+        ok('\u2705 PAID \u2014 status '+cj.status+' \u00b7 payment id '+cj.id);
+      } else {
+        bad('\u26a0\ufe0f Not paid \u2014 status '+(cj.status||('HTTP '+cr.status))+(cj.reason?(' \u00b7 '+cj.reason):''));
+      }
+      dump(JSON.stringify(cj,null,2));
     }catch(e){
       bad('\u274c '+((e && e.message) || e));
       try{ if(e) dump(JSON.stringify(e,null,2).slice(0,1000)); }catch(_){}
