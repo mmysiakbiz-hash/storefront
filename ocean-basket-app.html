@@ -581,6 +581,7 @@ button.is-loading{pointer-events:none}
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <script>/* qrcode-generator 2.0.4 (MIT) — inlined, offline-safe */
@@ -2983,12 +2984,13 @@ try{window.qrcode=module.exports;}catch(e){}})();
   </section>
 
   <!-- ============ PROFILE ============ -->
-  <section class="screen" id="s-profile">
+  <section class="screen" id="s-profile"><div id="acct-box" style="padding:0 16px"></div>
     <div class="prof-head">
       <div class="av" data-ic="profile"></div>
       <h2>Guest</h2>
       <p>Ocean Basket Seychelles</p>
     </div>
+    <div id="auth-box" style="padding:0 16px 14px"></div>
     <div class="prof-list">
       <button class="prof-row" onclick="go('orders')"><span class="pico" data-ic="orders"></span><span class="pt">My orders</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('map')"><span class="pico" data-ic="pin"></span><span class="pt">Collection points</span><span class="arr">›</span></button>
@@ -4692,5 +4694,122 @@ window.addEventListener('load', function(){
 });
 
 </script>
+
+<script>
+(function(){
+  if(!window.supabase){ return; }
+  var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
+  var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
+  var sbc=window.supabase.createClient(SB_URL, SB_ANON, {auth:{detectSessionInUrl:true, flowType:'implicit', persistSession:true, autoRefreshToken:true}});
+  window.sbc=sbc; window.authEmail=null;
+  var REDIRECT=location.origin+location.pathname;
+  function esc(s){ return String(s||'').replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+  window.renderAuthUI=async function(){
+    var b=document.getElementById('auth-box'); if(!b) return;
+    var sess=await sbc.auth.getSession();
+    var user=(sess&&sess.data&&sess.data.session)?sess.data.session.user:null;
+    window.authEmail=user?user.email:null;
+    var hh=document.querySelector('#s-profile .prof-head h2'); if(hh) hh.textContent=user?user.email:'Guest';
+    if(user){
+      b.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#eef4f0;border:1px solid #cfe2d6;border-radius:12px;padding:12px 14px">'+
+        '<div style="font-size:13px;color:#2f5e46">Signed in as <b>'+esc(user.email)+'</b></div>'+
+        '<button id="auth-out" style="background:#fff;border:1px solid #cfe2d6;border-radius:8px;padding:8px 14px;font:600 13px Outfit,sans-serif;color:#23262b;cursor:pointer">Sign out</button>'+
+      '</div>';
+      document.getElementById('auth-out').onclick=async function(){ await sbc.auth.signOut(); window.authEmail=null; renderAuthUI(); };
+    } else {
+      b.innerHTML='<div style="background:#f6f3ec;border:1px solid #e4ddcf;border-radius:12px;padding:14px">'+
+        '<div style="font-weight:700;color:#0a1140;margin-bottom:4px">Sign in / Sign up</div>'+
+        '<div style="font-size:12.5px;color:#857f74;margin-bottom:10px">See your orders on any device — we email you a magic link, no password needed.</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+          '<input id="auth-email" type="email" inputmode="email" placeholder="you@email.com" style="flex:1;min-width:150px;padding:11px 12px;border:1px solid #e4ddcf;border-radius:8px;font:15px Outfit,sans-serif">'+
+          '<button id="auth-send" style="background:#0a1140;color:#fff;border:0;border-radius:8px;padding:11px 18px;font:700 14px Outfit,sans-serif;cursor:pointer">Email me a link</button>'+
+        '</div>'+
+        '<div id="auth-msg" style="font-size:12.5px;margin-top:8px"></div>'+
+      '</div>';
+      var send=document.getElementById('auth-send');
+      send.onclick=async function(){
+        var email=(document.getElementById('auth-email').value||'').trim().toLowerCase();
+        var msg=document.getElementById('auth-msg');
+        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.style.color='#a8341a'; msg.textContent='Please enter a valid email.'; return; }
+        send.disabled=true; send.textContent='Sending\u2026';
+        var res=await sbc.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:REDIRECT } });
+        send.disabled=false; send.textContent='Email me a link';
+        if(res.error){ msg.style.color='#a8341a'; msg.textContent='Could not send: '+res.error.message; return; }
+        msg.style.color='#2f5e46'; msg.textContent='Check your email for the sign-in link.';
+      };
+    }
+  };
+  sbc.auth.onAuthStateChange(function(){ renderAuthUI(); });
+  if(document.readyState!=='loading') renderAuthUI(); else window.addEventListener('load', renderAuthUI);
+})();
+</script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  if(!window.supabase) return;
+  var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
+  var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
+  var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  window.sbc=sbc;
+  var API=(typeof API_BASE!=='undefined')?API_BASE:'https://storekit-pi.vercel.app/api/ocean-basket/v2';
+  function box(){ return document.getElementById('acct-box'); }
+  function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
+  function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
+  async function render(){
+    var b=box(); if(!b) return;
+    var s=await sbc.auth.getSession();
+    var sess=s&&s.data&&s.data.session;
+    if(sess){
+      var email=sess.user.email;
+      b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
+        '<div style="font-size:12px;color:#857f74">Signed in as</div>'+
+        '<div style="font-weight:700;color:#0a1140;margin:2px 0 12px;word-break:break-all">'+email+'</div>'+
+        '<button id="acct-out" style="background:#fff;border:1px solid #e4ddcf;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer">Log out</button>'+
+      '</div>';
+      document.getElementById('acct-out').onclick=async function(){ await sbc.auth.signOut(); render(); };
+      var hh=document.querySelector('#s-profile .prof-head h2'); if(hh && email) hh.textContent=email.split('@')[0];
+    } else {
+      b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
+        '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Your account</div>'+
+        '<div style="font-size:13px;color:#857f74;margin-bottom:12px">Create an account or sign in to keep your orders on any device and check out faster.</div>'+
+        '<input id="acct-name" placeholder="Name (new account)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+        '<input id="acct-email" type="email" autocomplete="email" placeholder="Email" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+        '<input id="acct-pass" type="password" autocomplete="current-password" placeholder="Password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:10px;font:15px inherit">'+
+        '<div id="acct-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
+        '<div style="display:flex;gap:10px">'+
+          '<button id="acct-signup" style="flex:1;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Create account</button>'+
+          '<button id="acct-signin" style="flex:1;background:#fff;border:1px solid #0a1140;color:#0a1140;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Sign in</button>'+
+        '</div>'+
+      '</div>';
+      document.getElementById('acct-signup').onclick=signUp;
+      document.getElementById('acct-signin').onclick=signIn;
+    }
+  }
+  async function signIn(){
+    var v=vals(); msg('');
+    if(!v.email||!v.pass){ msg('Enter email and password.'); return; }
+    var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
+    if(r.error){ msg(r.error.message); return; }
+    render();
+  }
+  async function signUp(){
+    var v=vals(); msg('');
+    if(!v.email||v.pass.length<6){ msg('Enter email and a password of at least 6 characters.'); return; }
+    try{
+      var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:v.email,password:v.pass,name:v.name})});
+      var out={}; try{ out=await resp.json(); }catch(e){}
+      if(!out.exists && (!resp.ok || out.error)){ msg(out.error||('Sign-up failed ('+resp.status+')')); return; }
+      var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
+      if(r.error){ msg(out.exists?'This email already has an account — use the correct password, or Sign in.':r.error.message); return; }
+      render();
+    }catch(e){ msg('Network error — try again.'); }
+  }
+  window.obAccountRender=render;
+  if(document.readyState!=='loading') render(); else window.addEventListener('load',render);
+})();
+</script>
+
 </body>
 </html>
