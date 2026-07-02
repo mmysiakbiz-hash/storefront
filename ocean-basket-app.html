@@ -3864,6 +3864,7 @@ function setFulfil(f){ state.fulfil=f; renderDelivery(); }
 function pickDrop(){ state.fulfil='pickup'; go('map'); }
 function pickDoor(){ state.fulfil='delivery'; state.point=null; go('payment'); }
 function confirmPoint(){ if(!state.point){ toast('Tap a point to select it'); return; } go('payment'); }
+function pickPoint(n){ state.point=n; go('payment'); }
 
 /* ---------- MAP / collection points (v2 — all 10 points) ---------- */
 var _map=null, _markers={};
@@ -3878,12 +3879,12 @@ function renderMap(){
     '<div class="map-cap">'+svg('pin',15,1.5)+' Tap a pin or a point below.</div>'+
     '<div class="pad" style="padding-top:0" id="point-list">'+
     POINTS.map(function(p){
-      return '<button class="point'+(state.point===p.n?' on':'')+'" id="ptbtn-'+p.n+'" onclick="setPoint('+p.n+')">'+
+      return '<button class="point'+(state.point===p.n?' on':'')+'" id="ptbtn-'+p.n+'" onclick="pickPoint('+p.n+')">'+
         '<span class="num" style="background:'+p.color+'">'+p.n+'</span>'+
         '<span class="pc"><h4>'+p.name+'</h4><p>'+p.id+' \u00b7 '+(p.colorName||'')+' label \u00b7 '+(p.zone||'')+'</p></span>'+
         '<span class="chk">'+svg('check',18,1.6)+'</span></button>';
     }).join('')+
-    '<button class="btn" style="margin-top:8px" onclick="confirmPoint()">Confirm point</button>'+
+    
   '</div>';
   setTimeout(initLeaflet, 60);
 }
@@ -3901,7 +3902,7 @@ function initLeaflet(){
     var icon=L.divIcon({ className:'ob-pin', html:'<div class="ob-pin-dot" style="background:'+p.color+'"><span>'+p.n+'</span></div>', iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-26] });
     var m=L.marker([p.lat,p.lng],{icon:icon}).addTo(_map);
     m.bindPopup('<b>'+p.id+' \u00b7 '+p.name+'</b><br>'+(p.colorName||'')+' label \u00b7 '+(p.zone||''));
-    m.on('click', function(){ setPoint(p.n); });
+    m.on('click', function(){ pickPoint(p.n); });
     _markers[p.n]=m; bounds.push([p.lat,p.lng]);
   });
   if(bounds.length){ _map.fitBounds(bounds, { padding:[40,40], maxZoom:13 }); }
