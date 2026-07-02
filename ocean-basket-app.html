@@ -4715,7 +4715,8 @@ window.addEventListener('load', function(){
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
-  if(!window.supabase) return;
+  function setBox(html){ var b=document.getElementById('acct-box'); if(b) b.innerHTML=html; }
+  if(!window.supabase){ setBox('<div style="padding:12px;color:#a8341a;font-size:13px;background:#fff;border:1px solid #e4ddcf;border-radius:12px;margin:8px 0">Account: the sign-in library did not load. Check your connection and reload.</div>'); return; }
   var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
   var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
   var sbc=window.supabase.createClient(SB_URL,SB_ANON,{auth:{storageKey:'ob-customer-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -4729,6 +4730,7 @@ window.addEventListener('load', function(){
   function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
   async function render(){
     var b=box(); if(!b) return;
+    try{
     if(recoveryMode){
       b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
         '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Set a new password</div>'+
@@ -4767,6 +4769,7 @@ window.addEventListener('load', function(){
       document.getElementById('acct-signin').onclick=signIn;
       var _fp=document.getElementById('acct-forgot'); if(_fp) _fp.onclick=function(e){ e.preventDefault(); forgotPw(); };
     }
+    }catch(err){ b.innerHTML='<div style="padding:12px;color:#a8341a;font-size:13px;background:#fff;border:1px solid #e4ddcf;border-radius:12px;margin:8px 0">Account error: '+((err&&err.message)||err)+'</div>'; }
   }
   async function forgotPw(){
     var v=vals(); msg('');
