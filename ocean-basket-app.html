@@ -2990,7 +2990,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <h2>Guest</h2>
       <p>Ocean Basket Seychelles</p>
     </div>
-    <div id="auth-box" style="padding:0 16px 14px"></div>
+    
     <div class="prof-list">
       <button class="prof-row" onclick="go('orders')"><span class="pico" data-ic="orders"></span><span class="pt">My orders</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('map')"><span class="pico" data-ic="pin"></span><span class="pt">Collection points</span><span class="arr">›</span></button>
@@ -4709,55 +4709,7 @@ window.addEventListener('load', function(){
 
 </script>
 
-<script>
-(function(){
-  if(!window.supabase){ return; }
-  var SB_URL='https://xhhwyyrbdhxgtcbpvges.supabase.co';
-  var SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaHd5eXJiZGh4Z3RjYnB2Z2VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgwMzMsImV4cCI6MjA5Njk2NDAzM30.wt5VQVCCZHEBAgygBdCWJzCR7bisbAAP_Q5uVFVEADU';
-  var sbc=window.supabase.createClient(SB_URL, SB_ANON, {auth:{detectSessionInUrl:true, flowType:'implicit', persistSession:true, autoRefreshToken:true}});
-  window.sbc=sbc;
-  window.OB_STORE='11111111-1111-1111-1111-111111111111'; window.authEmail=null;
-  var REDIRECT=location.origin+location.pathname;
-  function esc(s){ return String(s||'').replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
-  window.renderAuthUI=async function(){
-    var b=document.getElementById('auth-box'); if(!b) return;
-    var sess=await sbc.auth.getSession();
-    var user=(sess&&sess.data&&sess.data.session)?sess.data.session.user:null;
-    window.authEmail=user?user.email:null;
-    var hh=document.querySelector('#s-profile .prof-head h2'); if(hh) hh.textContent=user?user.email:'Guest';
-    if(user){
-      b.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#eef4f0;border:1px solid #cfe2d6;border-radius:12px;padding:12px 14px">'+
-        '<div style="font-size:13px;color:#2f5e46">Signed in as <b>'+esc(user.email)+'</b></div>'+
-        '<button id="auth-out" style="background:#fff;border:1px solid #cfe2d6;border-radius:8px;padding:8px 14px;font:600 13px Outfit,sans-serif;color:#23262b;cursor:pointer">Sign out</button>'+
-      '</div>';
-      document.getElementById('auth-out').onclick=async function(){ await sbc.auth.signOut(); window.authEmail=null; renderAuthUI(); };
-    } else {
-      b.innerHTML='<div style="background:#f6f3ec;border:1px solid #e4ddcf;border-radius:12px;padding:14px">'+
-        '<div style="font-weight:700;color:#0a1140;margin-bottom:4px">Sign in / Sign up</div>'+
-        '<div style="font-size:12.5px;color:#857f74;margin-bottom:10px">See your orders on any device — we email you a magic link, no password needed.</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-          '<input id="auth-email" type="email" inputmode="email" placeholder="you@email.com" style="flex:1;min-width:150px;padding:11px 12px;border:1px solid #e4ddcf;border-radius:8px;font:15px Outfit,sans-serif">'+
-          '<button id="auth-send" style="background:#0a1140;color:#fff;border:0;border-radius:8px;padding:11px 18px;font:700 14px Outfit,sans-serif;cursor:pointer">Email me a link</button>'+
-        '</div>'+
-        '<div id="auth-msg" style="font-size:12.5px;margin-top:8px"></div>'+
-      '</div>';
-      var send=document.getElementById('auth-send');
-      send.onclick=async function(){
-        var email=(document.getElementById('auth-email').value||'').trim().toLowerCase();
-        var msg=document.getElementById('auth-msg');
-        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.style.color='#a8341a'; msg.textContent='Please enter a valid email.'; return; }
-        send.disabled=true; send.textContent='Sending\u2026';
-        var res=await sbc.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:REDIRECT } });
-        send.disabled=false; send.textContent='Email me a link';
-        if(res.error){ msg.style.color='#a8341a'; msg.textContent='Could not send: '+res.error.message; return; }
-        msg.style.color='#2f5e46'; msg.textContent='Check your email for the sign-in link.';
-      };
-    }
-  };
-  sbc.auth.onAuthStateChange(function(){ renderAuthUI(); });
-  if(document.readyState!=='loading') renderAuthUI(); else window.addEventListener('load', renderAuthUI);
-})();
-</script>
+
 
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
