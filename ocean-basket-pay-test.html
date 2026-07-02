@@ -41,7 +41,13 @@
     <label>Endpoint</label>
     <input id="url" type="text" value="https://storekit-pi.vercel.app/api/ocean-basket/v2/capture-context">
 
+    <label>Merchant ID override (optional — leave empty to use env)</label>
+    <input id="mid" type="text" placeholder="e.g. barclays_seychelles_dm_acct">
+    <label>Key ID override (optional)</label>
+    <input id="kid" type="text" placeholder="leave empty to use env">
+
     <button id="go">Test capture context</button>
+    <button id="cfg" style="background:#fff;border:1px solid var(--navy);color:var(--navy);margin-top:10px">Show config (debug — no secrets)</button>
 
     <div id="verdict" class="verdict"></div>
     <pre id="out"></pre>
@@ -62,7 +68,9 @@
     var orderId=document.getElementById('oid').value.trim();
     try{
       var r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ amount:amount, orderId:orderId }) });
+        body: JSON.stringify({ amount:amount, orderId:orderId,
+          merchantId: (document.getElementById('mid').value.trim()||undefined),
+          keyId: (document.getElementById('kid').value.trim()||undefined) }) });
       var text=await r.text();
       var isJwt = r.ok && text.indexOf('eyJ')===0;
       if(isJwt){
@@ -82,6 +90,16 @@
       show(verdict);
     }
     btn.disabled=false; btn.textContent='Test capture context';
+  };
+  document.getElementById('cfg').onclick=async function(){
+    hide(verdict); hide(out); out.textContent='';
+    var url=document.getElementById('url').value.trim();
+    try{
+      var r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ debug:true }) });
+      var j=await r.json();
+      verdict.className='verdict ok'; verdict.textContent='Config (no secret values shown):'; show(verdict);
+      out.textContent=JSON.stringify(j,null,2); show(out);
+    }catch(e){ verdict.className='verdict bad'; verdict.textContent='Config request failed: '+(e&&e.message||e); show(verdict); }
   };
 </script>
 </body>
