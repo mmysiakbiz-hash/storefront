@@ -858,15 +858,20 @@ boot();
   #p-clients .cl-ov{font-weight:700;color:#0a1140}
   #p-clients .cl-items{color:#5b5750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #p-clients .cl-pats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  #p-clients .cl-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:10px;margin-left:4px}
+  #p-clients .cl-b-new{background:#e7f0f5;color:#1e6e8c}
+  #p-clients .cl-b-ret{background:#edf3ee;color:#3f7a5a}
+  #p-clients .cl-b-dorm{background:#fbeae5;color:#a8341a}
 </style>
 <script>
 (function(){
   window.renderClients=async function(){
     var host=document.getElementById('clients-body'); if(!host) return;
     host.innerHTML='Loading\u2026';
+    var sortKey=(document.getElementById('cl-sort')&&document.getElementById('cl-sort').value)||'recent';
     var r=await sb.from('ob_orders').select('*').eq('store_id',STORE_ID).order('created_at',{ascending:false}).limit(2000);
     var orders=(r&&r.data)||[];
-    var it=await sb.from('ob_order_items').select('order_id,product_id,product_name,weight_kg,packs,price').limit(8000);
+    var it=await sb.from('ob_order_items').select('order_id,product_id,product_name,state,cut,weight_kg,packs,price').limit(8000);
     var items=(it&&it.data)||[];
     var itemsBy={}; items.forEach(function(x){ (itemsBy[x.order_id]=itemsBy[x.order_id]||[]).push(x); });
     function prettyProd(x){ return x.product_name || String(x.product_id||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
@@ -875,9 +880,12 @@ boot();
     function money(n){ return 'SCR '+Number(n||0).toFixed(0); }
     function avg(a){ return a.length? a.reduce(function(s,x){return s+x;},0)/a.length : null; }
     function dstr(s){ return s? new Date(s).toISOString().slice(0,10):''; }
+    function daysSince(s){ return s? Math.floor((Date.now()-new Date(s))/86400000):null; }
+    function channelOf(o){ return o.type==='travel'?'Travel':(o.fulfilment==='door'?'Delivery':'Collection'); }
     var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     function topKey(c){ var b=null,bn=-1; for(var k in c){ if(c[k]>bn){bn=c[k];b=k;} } return b; }
     function topN(c,n){ return Object.keys(c).sort(function(a,b){return c[b]-c[a];}).slice(0,n); }
+    var DORMANT_DAYS=60;
 
     var by={};
     orders.forEach(function(o){
@@ -888,16 +896,43 @@ boot();
       if(!g.phone && o.phone) g.phone=o.phone;
     });
 
-    var allDur=[], pointAgg={}, prodAll={}, dowAll={}, hourAll={};
+    var allDur=[], pointAgg={}, prodAll={}, dowAll={}, hourAll={}, freshKgAll=0, frozenKgAll=0, chanAll={};
     orders.forEach(function(o){
       var d=durMs(o); if(d!=null){ allDur.push(d); var p=o.drop_point_id||'\u2014'; (pointAgg[p]=pointAgg[p]||[]).push(d); }
       if(o.created_at){ var dt=new Date(o.created_at); dowAll[dt.getDay()]=(dowAll[dt.getDay()]||0)+1; hourAll[dt.getHours()]=(hourAll[dt.getHours()]||0)+1; }
-      (itemsBy[o.id]||[]).forEach(function(x){ var n=prettyProd(x); prodAll[n]=(prodAll[n]||0)+1; });
+      chanAll[channelOf(o)]=(chanAll[channelOf(o)]||0)+1;
+      (itemsBy[o.id]||[]).forEach(function(x){ var n=prettyProd(x); prodAll[n]=(prodAll[n]||0)+1; var kg=Number(x.weight_kg||0); if((x.state||'')==='frozen') frozenKgAll+=kg; else freshKgAll+=kg; });
     });
-    var clients=Object.keys(by).map(function(k){return by[k];});
-    clients.sort(function(a,b){ return new Date(b.orders[0].created_at)-new Date(a.orders[0].created_at); });
+
+    // per-client derived metrics
+    var clients=Object.keys(by).map(function(k){ return by[k]; });
+    clients.forEach(function(g){
+      var os=g.orders.slice().sort(function(a,b){ return new Date(a.created_at)-new Date(b.created_at); }); // asc
+      g.rev=os.reduce(function(s,o){return s+Number(o.total||0);},0);
+      g.count=os.length; g.aov=g.count? g.rev/g.count:0;
+      g.first=os[0].created_at; g.last=os[os.length-1].created_at;
+      g.daysSinceLast=daysSince(g.last);
+      g.returning=g.count>1;
+      g.dormant=(g.daysSinceLast!=null && g.daysSinceLast>DORMANT_DAYS && g.count>0);
+      // cycle: avg gap between orders
+      if(os.length>1){ var gaps=[]; for(var i=1;i<os.length;i++){ gaps.push((new Date(os[i].created_at)-new Date(os[i-1].created_at))/86400000); } g.cycle=avg(gaps); } else g.cycle=null;
+      var cp={}, cpt={}, chan={}, fresh=0, froz=0;
+      os.forEach(function(o){ chan[channelOf(o)]=(chan[channelOf(o)]||0)+1; if(o.drop_point_id) cpt[o.drop_point_id]=(cpt[o.drop_point_id]||0)+1;
+        (itemsBy[o.id]||[]).forEach(function(x){ cp[prettyProd(x)]=(cp[prettyProd(x)]||0)+1; var kg=Number(x.weight_kg||0); if((x.state||'')==='frozen') froz+=kg; else fresh+=kg; }); });
+      g.favs=topN(cp,3); g.favPoint=topKey(cpt); g.chan=chan; g.mainChan=topKey(chan); g.freshKg=fresh; g.frozenKg=froz; g.totalKg=fresh+froz;
+      var cd={},ch={}; os.forEach(function(o){ if(o.created_at){var dt=new Date(o.created_at); cd[dt.getDay()]=(cd[dt.getDay()]||0)+1; ch[dt.getHours()]=(ch[dt.getHours()]||0)+1;} }); g.gd=topKey(cd); g.gh=topKey(ch);
+    });
+
+    var cmp={ recent:function(a,b){return new Date(b.last)-new Date(a.last);},
+      ltv:function(a,b){return b.rev-a.rev;}, orders:function(a,b){return b.count-a.count;},
+      avg:function(a,b){return b.aov-a.aov;}, dormant:function(a,b){return (b.daysSinceLast||0)-(a.daysSinceLast||0);} };
+    clients.sort(cmp[sortKey]||cmp.recent);
+
     var totalRev=orders.reduce(function(s,o){return s+Number(o.total||0);},0);
-    var avgOrder=orders.length? totalRev/orders.length : 0;
+    var avgOrder=orders.length? totalRev/orders.length:0;
+    var nNew=clients.filter(function(g){return !g.returning;}).length;
+    var nRet=clients.filter(function(g){return g.returning;}).length;
+    var nDorm=clients.filter(function(g){return g.dormant;}).length;
     var bDow=topKey(dowAll), bHour=topKey(hourAll);
 
     var summary='<div class="cl-cards">'+
@@ -907,46 +942,47 @@ boot();
       '<div class="cl-card"><div class="cl-n">'+money(avgOrder)+'</div><div class="cl-l">avg order</div></div>'+
       '<div class="cl-card"><div class="cl-n">'+fmtDur(avg(allDur))+'</div><div class="cl-l">avg freezer\u2192collect</div></div>'+
     '</div>';
-
     var patterns='<div class="cl-pats">'+
-      '<div class="cl-pt"><span class="cl-mut">Busiest day</span> <b>'+(bDow!=null?DOW[bDow]:'\u2014')+'</b></div>'+
-      '<div class="cl-pt"><span class="cl-mut">Busiest hour</span> <b>'+(bHour!=null?(bHour+':00'):'\u2014')+'</b></div>'+
+      '<div class="cl-pt"><span class="cl-mut">New / Returning</span> <b>'+nNew+' / '+nRet+'</b></div>'+
+      '<div class="cl-pt"><span class="cl-mut">Dormant &gt;'+DORMANT_DAYS+'d</span> <b>'+nDorm+'</b></div>'+
+      '<div class="cl-pt"><span class="cl-mut">Busiest</span> <b>'+(bDow!=null?DOW[bDow]:'\u2014')+' '+(bHour!=null?(bHour+':00'):'')+'</b></div>'+
+      '<div class="cl-pt"><span class="cl-mut">Fresh / Frozen</span> <b>'+freshKgAll.toFixed(0)+' / '+frozenKgAll.toFixed(0)+' kg</b></div>'+
+      '<div class="cl-pt"><span class="cl-mut">Channels</span> <b>'+Object.keys(chanAll).map(function(k){return k+' '+chanAll[k];}).join(' \u00b7 ')+'</b></div>'+
       '<div class="cl-pt"><span class="cl-mut">Top items</span> <b>'+(topN(prodAll,3).join(', ')||'\u2014')+'</b></div>'+
     '</div>';
-
     var pts=Object.keys(pointAgg).sort();
     var pointTable=pts.length? '<h3 class="cl-h">Avg freezer \u2192 collection by point</h3><div class="cl-pts">'+
       pts.map(function(p){ return '<div class="cl-pt"><b>'+p+'</b> '+fmtDur(avg(pointAgg[p]))+' <span class="cl-mut">('+pointAgg[p].length+')</span></div>'; }).join('')+'</div>' : '';
 
+    var sortSel='<div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><span class="cl-mut" style="font-size:12px">Sort by</span>'+
+      '<select id="cl-sort" onchange="renderClients()" style="font:14px Outfit,sans-serif;padding:7px 10px;border:1px solid #e4ddcf;border-radius:6px;background:#fff">'+
+      [['recent','Most recent'],['ltv','Lifetime value'],['orders','Order count'],['avg','Avg order value'],['dormant','Longest inactive']]
+        .map(function(o){return '<option value="'+o[0]+'"'+(o[0]===sortKey?' selected':'')+'>'+o[1]+'</option>';}).join('')+
+      '</select></div>';
+
     var list=clients.map(function(g){
-      var rev=g.orders.reduce(function(s,o){return s+Number(o.total||0);},0);
-      var aov=g.orders.length? rev/g.orders.length : 0;
-      var last=g.orders[0];
-      var cd={}, ch={}, cp={};
-      g.orders.forEach(function(o){
-        if(o.created_at){ var dt=new Date(o.created_at); cd[dt.getDay()]=(cd[dt.getDay()]||0)+1; ch[dt.getHours()]=(ch[dt.getHours()]||0)+1; }
-        (itemsBy[o.id]||[]).forEach(function(x){ var n=prettyProd(x); cp[n]=(cp[n]||0)+1; });
-      });
-      var gd=topKey(cd), gh=topKey(ch);
       var rows=g.orders.map(function(o){
         var its=(itemsBy[o.id]||[]).map(prettyProd).join(', ');
         return '<div class="cl-order"><span class="cl-oid">'+o.id+'</span>'+
-          '<span>'+dstr(o.created_at)+'</span>'+
-          '<span>'+(o.drop_point_id||(o.fulfilment==='door'?'door':'\u2014'))+'</span>'+
-          '<span class="cl-ost cl-ost-'+o.status+'">'+o.status+'</span>'+
-          '<span class="cl-ov">'+money(o.total)+'</span>'+
-          '<span>'+fmtDur(durMs(o))+'</span>'+
-          '<span class="cl-items" title="'+its+'">'+(its||'\u2014')+'</span></div>';
+          '<span>'+dstr(o.created_at)+'</span><span>'+(o.drop_point_id||(o.fulfilment==='door'?'door':'\u2014'))+'</span>'+
+          '<span class="cl-ost cl-ost-'+o.status+'">'+o.status+'</span><span class="cl-ov">'+money(o.total)+'</span>'+
+          '<span>'+fmtDur(durMs(o))+'</span><span class="cl-items" title="'+its+'">'+(its||'\u2014')+'</span></div>';
       }).join('');
+      var badges=(g.returning?'<span class="cl-badge cl-b-ret">returning</span>':'<span class="cl-badge cl-b-new">new</span>')+
+                 (g.dormant?'<span class="cl-badge cl-b-dorm">dormant '+g.daysSinceLast+'d</span>':'');
       return '<div class="cl-client">'+
         '<div class="cl-head" onclick="var e=this.nextElementSibling;e.style.display=(e.style.display===\'none\'?\'block\':\'none\')">'+
-          '<div><b>'+(g.name||'(no name)')+'</b> <span class="cl-mut">'+g.email+(g.phone?(' \u00b7 '+g.phone):'')+'</span></div>'+
-          '<div class="cl-meta">'+g.orders.length+' orders \u00b7 <b>'+money(rev)+'</b> LTV \u00b7 '+money(aov)+' avg \u00b7 last '+dstr(last.created_at)+'</div>'+
+          '<div><b>'+(g.name||'(no name)')+'</b> '+badges+' <span class="cl-mut">'+g.email+(g.phone?(' \u00b7 '+g.phone):'')+'</span></div>'+
+          '<div class="cl-meta">'+g.count+' orders \u00b7 <b>'+money(g.rev)+'</b> LTV \u00b7 '+money(g.aov)+' avg \u00b7 last '+dstr(g.last)+'</div>'+
         '</div>'+
         '<div class="cl-orders" style="display:none">'+
           '<div class="cl-pats" style="margin:2px 0 10px">'+
-            '<div class="cl-pt"><span class="cl-mut">Usually</span> <b>'+(gd!=null?DOW[gd]:'\u2014')+'</b> <span class="cl-mut">around</span> <b>'+(gh!=null?(gh+':00'):'\u2014')+'</b></div>'+
-            '<div class="cl-pt"><span class="cl-mut">Favourites</span> <b>'+(topN(cp,3).join(', ')||'\u2014')+'</b></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Buys every</span> <b>'+(g.cycle!=null?('~'+Math.round(g.cycle)+'d'):'\u2014')+'</b></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Usually</span> <b>'+(g.gd!=null?DOW[g.gd]:'\u2014')+(g.gh!=null?(' '+g.gh+':00'):'')+'</b></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Mostly</span> <b>'+(g.mainChan||'\u2014')+'</b></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Fav point</span> <b>'+(g.favPoint||'\u2014')+'</b></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Total</span> <b>'+g.totalKg.toFixed(1)+' kg</b> <span class="cl-mut">(fresh '+g.freshKg.toFixed(1)+' / frozen '+g.frozenKg.toFixed(1)+')</span></div>'+
+            '<div class="cl-pt"><span class="cl-mut">Favourites</span> <b>'+(g.favs.join(', ')||'\u2014')+'</b></div>'+
           '</div>'+
           '<div class="cl-order cl-order-h"><span>Order</span><span>Date</span><span>Point</span><span>Status</span><span>Cart</span><span>Frz\u2192Col</span><span>Items</span></div>'+
           rows+
@@ -954,7 +990,7 @@ boot();
       '</div>';
     }).join('');
 
-    host.innerHTML=summary+patterns+pointTable+'<h3 class="cl-h">Clients ('+clients.length+')</h3>'+(list||'<div class="cl-mut">No orders yet.</div>');
+    host.innerHTML=summary+patterns+pointTable+sortSel+'<h3 class="cl-h">Clients ('+clients.length+')</h3>'+(list||'<div class="cl-mut">No orders yet.</div>');
   };
 })();
 </script>
