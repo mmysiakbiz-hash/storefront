@@ -4748,7 +4748,8 @@ loadCatalog().then(function(){
   if(state.screen==='shop'){ renderCats(); renderSpecies(); }
 }).catch(function(e){ console.warn('Using built-in catalog (offline):', e.message); });
 
-window.addEventListener('load', function(){
+window.addEventListener('load', function(){ try{ if(location.pathname.indexOf('ocean-basket-app')>-1){ history.replaceState(null,'','/'+location.search+location.hash); } }catch(e){} });
+  window.addEventListener('load', function(){
   try{
     var q=new URLSearchParams(location.search).get('order');
     if(!q) return;
