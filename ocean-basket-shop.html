@@ -105,8 +105,30 @@ async function render(){
   view.innerHTML=html;
 }
 
+function setPasswordView(){
+  who.textContent='Set your password';
+  view.innerHTML='<div class="card"><div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:2px">Set your password</div>'
+    +'<div class="pt" style="margin-bottom:10px">Choose a password. Next time you just log in with your email and this password.</div>'
+    +'<label>New password</label><input id="pw" type="password" autocomplete="new-password" placeholder="At least 8 characters"/>'
+    +'<label>Repeat</label><input id="pw2" type="password" autocomplete="new-password" placeholder="Repeat it"/>'
+    +'<button class="btn" id="savepw" style="margin-top:16px">Set password &amp; continue</button><div id="m"></div></div>';
+  document.getElementById('savepw').onclick=async function(){
+    var p=document.getElementById('pw').value, p2=document.getElementById('pw2').value, m=document.getElementById('m');
+    if(p.length<8){ m.innerHTML='<div class="msg err">Min 8 characters.</div>'; return; }
+    if(p!==p2){ m.innerHTML='<div class="msg err">Passwords don\'t match.</div>'; return; }
+    var b=document.getElementById('savepw'); b.disabled=true; b.textContent='Saving\u2026';
+    var {error}=await sb.auth.updateUser({password:p});
+    if(error){ m.innerHTML='<div class="msg err">'+esc(error.message)+'</div>'; b.disabled=false; b.textContent='Set password & continue'; return; }
+    boot();
+  };
+}
+
 async function boot(){
+  var hash=(location.hash||'')+(location.search||'');
+  var isRecovery=/type=recovery|access_token=/.test(hash);
+  await new Promise(function(r){ setTimeout(r,300); });
   var {data:{session}}=await sb.auth.getSession();
+  if(isRecovery && session){ history.replaceState(null,'',location.pathname); who.textContent=session.user.email; return setPasswordView(); }
   if(!session){ loginView(); return; }
   who.textContent=session.user.email;
   render();
