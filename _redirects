@@ -1,0 +1,8 @@
+# Short, friendly URLs for Ocean Basket — Cloudflare Pages redirects
+# Left = pretty path, middle = real file, right = 302 (temporary redirect)
+/app       /ocean-basket-app.html      302
+/shop      /ocean-basket-shop.html     302
+/driver    /ocean-basket-driver.html   302
+/collect   /ocean-basket-collect.html  302
+/admin     /ocean-basket-admin.html    302
+/paytest   /ocean-basket-pay-test.html 302
