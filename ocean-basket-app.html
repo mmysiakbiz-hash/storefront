@@ -3944,6 +3944,7 @@ function renderPayment(){
     '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+
     addressFields+
     '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
+    '<p style="font-size:12px;color:#8a8577;margin:8px 2px 0">Google Pay and Apple Pay may also appear at the payment step, on supported devices.</p>'+
     '<h3 style="font-size:16px; margin:18px 0 12px">Order summary</h3>'+
     '<div class="cart-summary" style="margin:0">'+
       state.cart.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.lineTotal)+'</span></div>'; }).join('')+
@@ -4287,7 +4288,7 @@ var CHAT_KB = [
   { q:'Where do I collect a Travel Box?', cat:'Travel Box', a:'Travel Boxes can only be collected at our four outlets (Beau Vallon, Plaisance, STC, Providence) so you can inspect the fish before the box is sealed. They are not sent to freezer points.' },
   { q:'Do I get export documents?', cat:'Travel Box', a:'Yes — your Travel Box includes a commercial invoice, packing list and food-safety declaration. We collect your traveller details for the certificate after you confirm.' },
   // ----- Payment / general -----
-  { q:'How do I pay?', cat:'Payment', a:'You confirm your order in the app. Online card payment is being set up — in the meantime our team confirms your order and payment by WhatsApp.' },
+  { q:'How do I pay?', cat:'Payment', a:'You pay securely by card in the app. You get an on-screen confirmation (save the QR or code) plus an email. At collection, show the QR or quote your order code.' },
   { q:'Can I track my order?', cat:'Payment', a:'Yes — open the <b>Orders</b> tab to see your order and its live status, from received through to ready for collection or delivery.' },
   { q:'Can I cancel or change an order?', cat:'Payment', a:'For changes, cancellations or refunds, please talk to a person — tap “Talk to a person” below and we will help you directly.' }
 ];
@@ -4896,7 +4897,7 @@ window.addEventListener('load', function(){
     wrap.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:16px;margin:14px 16px">'+
       '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Save this order to an account (optional)</div>'+
       '<div style="font-size:13px;color:#857f74;margin-bottom:10px">Your order is already saved on this device \u2014 track it any time under <b>Orders</b>. Create a free account with <b>'+email+'</b> to also:</div>'+
-      '<ul style="margin:0 0 12px 18px;padding:0;font-size:13px;color:#5b5750;line-height:1.5"><li>track your orders from <b>any device</b></li><li>collect <b>loyalty rewards</b> on your purchases</li></ul>'+
+      '<ul style="margin:0 0 12px 18px;padding:0;font-size:13px;color:#5b5750;line-height:1.5"><li>track your orders from <b>any device</b></li><li>check out faster with your details <b>saved</b></li></ul>'+
       '<input id="succ-pass" type="password" placeholder="Choose a password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
       '<div id="succ-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
       '<div style="display:flex;gap:10px">'+
