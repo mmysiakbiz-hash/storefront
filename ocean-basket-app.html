@@ -3924,7 +3924,7 @@ function renderPayment(){
   var doorCode = state.fulfil==='delivery' ? (deliveryFee===0?'GOLD':'SILVER') : null;
   var total=sub+deliveryFee;
   var c=state.customer;
-  if(window.OB_USER && window.OB_USER.email){ c.email=window.OB_USER.email; if(!c.name && window.OB_USER.name) c.name=window.OB_USER.name; }
+  if(window.OB_USER && window.OB_USER.email){ c.email=window.OB_USER.email; if(!c.name && window.OB_USER.name) c.name=window.OB_USER.name; if(!c.phone && window.OB_USER.phone) c.phone=window.OB_USER.phone; }
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
 
   var addressFields = state.fulfil==='delivery'
@@ -4075,7 +4075,7 @@ function saveConfirmation(){
 }
 function b64urlToJson(seg){ var s=seg.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return JSON.parse(decodeURIComponent(escape(atob(s)))); }
 function obLoadPaySdk(src,integrity){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; } s.onload=function(){res();}; s.onerror=function(){rej(new Error('Could not load the secure payment library'));}; document.head.appendChild(s); }); }
-function cancelUnpaid(no){ if(!no) return; fetch(API_BASE+'/cancel-unpaid',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ orderId:no }) }).then(function(r){ return r.json(); }).then(function(){ toast('Order cancelled'); go('orders'); if(typeof renderOrders==='function') renderOrders(); }).catch(function(){ go('orders'); }); }
+function cancelUnpaid(no){ if(!no) return; var lk=document.getElementById('ob-cancel-link'); if(lk){ if(lk.dataset.busy) return; lk.dataset.busy='1'; lk.textContent='Cancelling\u2026'; lk.style.pointerEvents='none'; lk.style.opacity='0.6'; } fetch(API_BASE+'/cancel-unpaid',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ orderId:no }) }).then(function(r){ return r.json(); }).then(function(){ toast('Order cancelled'); go('orders'); if(typeof renderOrders==='function') renderOrders(); }).catch(function(){ go('orders'); }); }
 function payPending(no,total){ startCardPayment({ no:no, total:Number(total||0), status:'pending_payment', __resume:true }); }
 function startCardPayment(order){
   go('pay');
@@ -4083,7 +4083,7 @@ function startCardPayment(order){
   host.innerHTML='<div class="pad"><h2 style="margin:0 0 4px">Pay SCR '+Number(order.total).toFixed(2)+'</h2>'+
     '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px">Loading secure payment\u2026</div>'+
     '<div id="ob-uc-buttons"></div>'+
-    '<div id="pay-retry" style="display:none;margin-top:14px"><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
+    '<div id="pay-retry" style="display:none;margin-top:14px"><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a id="ob-cancel-link" href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
   window.__payOrder=order;
   runUnifiedCheckout(order).catch(function(e){
     var m=el('pay-msg'); if(m){ m.textContent='Payment could not start: '+((e&&e.message)||e); }
@@ -4783,7 +4783,7 @@ window.addEventListener('load', function(){
   function msg(t){ var m=document.getElementById('acct-msg'); if(m) m.textContent=t||''; }
   function errText(e){ if(!e) return 'Unknown error'; if(typeof e==='string') return e; return e.message||e.error_description||e.msg||(typeof e.error==='string'?e.error:'')||'Something went wrong — please try again.'; }
   function refreshOrders(){ try{ if(typeof renderOrders==='function' && typeof state!=='undefined' && state.screen==='orders') renderOrders(); }catch(e){} }
-  function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
+  function vals(){ return { name:((document.getElementById('acct-name')||{}).value||'').trim(), phone:((document.getElementById('acct-phone')||{}).value||'').trim(), email:(((document.getElementById('acct-email')||{}).value)||'').trim().toLowerCase(), pass:((document.getElementById('acct-pass')||{}).value)||'' }; }
   async function render(){
     var b=box(); if(!b) return;
     try{
@@ -4813,7 +4813,7 @@ window.addEventListener('load', function(){
     var sess=s&&s.data&&s.data.session;
     if(sess){
       var email=sess.user.email;
-      window.OB_USER={email:email,name:((sess.user.user_metadata&&sess.user.user_metadata.name)||'')};
+      window.OB_USER={email:email,name:((sess.user.user_metadata&&sess.user.user_metadata.name)||''),phone:((sess.user.user_metadata&&sess.user.user_metadata.phone)||'')};
       b.innerHTML='<div style="background:#fff;border:1px solid #e4ddcf;border-radius:12px;padding:14px;margin:8px 0">'+
         '<div style="font-size:12px;color:#857f74">Signed in as</div>'+
         '<div style="font-weight:700;color:#0a1140;margin:2px 0 12px;word-break:break-all">'+email+'</div>'+
@@ -4826,6 +4826,7 @@ window.addEventListener('load', function(){
         '<div style="font-weight:800;color:#0a1140;margin-bottom:6px">Your account</div>'+
         '<div style="font-size:13px;color:#857f74;margin-bottom:12px">Create an account or sign in to keep your orders on any device and check out faster.</div>'+
         '<input id="acct-name" placeholder="Name (new account)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
+        '<input id="acct-phone" type="tel" autocomplete="tel" placeholder="Phone (WhatsApp)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
         '<input id="acct-email" type="email" autocomplete="email" placeholder="Email" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:8px;font:15px inherit">'+
         '<input id="acct-pass" type="password" autocomplete="current-password" placeholder="Password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #e4ddcf;border-radius:8px;margin-bottom:10px;font:15px inherit">'+
         '<div id="acct-msg" style="font-size:12px;color:#a8341a;min-height:14px;margin-bottom:8px"></div>'+
@@ -4879,7 +4880,7 @@ window.addEventListener('load', function(){
     var v=vals(); msg('');
     if(!v.email||v.pass.length<6){ msg('Enter email and a password of at least 6 characters.'); return; }
     try{
-      var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:v.email,password:v.pass,name:v.name})});
+      var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:v.email,password:v.pass,name:v.name,phone:v.phone})});
       var out={}; try{ out=await resp.json(); }catch(e){}
       if(!out.exists && (!resp.ok || out.error)){ msg(errText(out.error)||('Sign-up failed ('+resp.status+')')); return; }
       var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
