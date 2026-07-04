@@ -1,0 +1,31 @@
+/* sey.la | book — Spacing, radius, layout tokens
+   Generous, airy. "Dużo powietrza" — lots of breathing room. */
+
+:root {
+  /* Spacing scale (4px base, but generous jumps) */
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.5rem;    /* 24 */
+  --space-6: 2rem;      /* 32 */
+  --space-7: 3rem;      /* 48 */
+  --space-8: 4rem;      /* 64 */
+  --space-9: 6rem;      /* 96 */
+  --space-10: 8rem;     /* 128 */
+
+  /* Section rhythm */
+  --section-y: clamp(4rem, 8vw, 8rem);      /* @kind spacing */
+  --gutter: clamp(1.25rem, 4vw, 3rem);      /* @kind spacing */
+  --maxw: 1200px;         /* @kind spacing */
+  --maxw-narrow: 760px;   /* @kind spacing */
+
+  /* Radii — soft, organic, arch-like. Never sharp. */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 40px;
+  --radius-pill: 999px;
+  --radius-arch: 50% 50% 12px 12px / 40% 40% 12px 12px; /* @kind radius */
+}

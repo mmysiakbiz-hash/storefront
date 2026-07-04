@@ -1,0 +1,39 @@
+/* sey.la | book — Shadows, gradients, motion, texture */
+
+:root {
+  /* Shadows — warm-tinted, soft, low. Like candlelight, not hard UI. */
+  --shadow-xs: 0 1px 2px rgba(59, 42, 37, 0.05);
+  --shadow-sm: 0 2px 8px rgba(59, 42, 37, 0.06);
+  --shadow-md: 0 8px 24px rgba(59, 42, 37, 0.08);
+  --shadow-lg: 0 18px 48px rgba(59, 42, 37, 0.12);
+  --shadow-float: 0 24px 60px -12px rgba(59, 42, 37, 0.22);
+  --shadow-focus: 0 0 0 3px rgba(111, 130, 101, 0.45); /* eucalyptus focus */
+
+  /* Candlelight gradient — the signature warm glow (hero arch fill) */
+  --grad-candle: radial-gradient(120% 90% at 50% 108%,
+      #F6D9A8 0%, #F0C089 22%, #E9A97C 46%, #D98C6E 68%, #B8674F 100%); /* @kind other */
+  --grad-candle-soft: radial-gradient(100% 80% at 50% 100%,
+      #F6E2C4 0%, #EFD0B0 40%, #E4B79C 100%); /* @kind other */
+
+  /* Soft botanical wash */
+  --grad-eucalyptus: linear-gradient(160deg, #7C9071 0%, #61735A 100%); /* @kind other */
+
+  /* Warm light bloom for drifting background spots */
+  --bloom-clay: radial-gradient(circle, rgba(168,80,63,0.16) 0%, rgba(168,80,63,0) 70%); /* @kind other */
+  --bloom-brass: radial-gradient(circle, rgba(178,146,95,0.18) 0%, rgba(178,146,95,0) 70%); /* @kind other */
+  --bloom-eucalyptus: radial-gradient(circle, rgba(111,130,101,0.14) 0%, rgba(111,130,101,0) 70%); /* @kind other */
+
+  /* Warm image treatment — unifies mixed stock photos into the brand palette */
+  --photo-filter: saturate(1.06) contrast(1.02) brightness(1.01); /* @kind other */
+  --photo-overlay: linear-gradient(180deg, rgba(59,42,37,0) 42%, rgba(59,42,37,0.5) 100%); /* @kind other */
+  --photo-warm: linear-gradient(0deg, rgba(168,80,63,0.10), rgba(236,216,203,0.10)); /* @kind other */
+
+  /* Motion — slow, calm, spa-like */
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);  /* @kind other */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);       /* @kind other */
+  --dur-fast: 180ms;   /* @kind other */
+  --dur-med: 320ms;    /* @kind other */
+  --dur-slow: 620ms;   /* @kind other */
+  --dur-drift: 22s;    /* @kind other */
+  --dur-float: 6s;     /* @kind other */
+}

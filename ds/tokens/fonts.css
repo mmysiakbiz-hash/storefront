@@ -1,0 +1,6 @@
+/* sey.la | book — Web fonts
+   Fraunces (display serif) + Hanken Grotesk (body/UI), loaded from Google Fonts CDN.
+   NOTE: CDN-linked, not self-hosted. To ship offline binaries, drop .woff2 files
+   into assets/fonts/ and replace the @import with local @font-face rules. */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Hanken+Grotesk:wght@300..700&display=swap");

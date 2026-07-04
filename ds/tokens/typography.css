@@ -1,0 +1,41 @@
+/* sey.la | book — Typography tokens
+   Display: Fraunces (soft warm serif). Body/UI: Hanken Grotesk. */
+
+:root {
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif; /* @kind font */
+  --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; /* @kind font */
+
+  /* Weights */
+  --fw-light: 300;    /* @kind font */
+  --fw-regular: 400;  /* @kind font */
+  --fw-medium: 500;   /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700;     /* @kind font */
+
+  /* ---- Type scale (fluid) ----
+     Display uses a warm, slightly condensed optical feel; body stays even. */
+  --text-display-xl: clamp(3.25rem, calc(1.8rem + 6.4vw), 6rem);   /* @kind font */
+  --text-display-lg: clamp(2.5rem, calc(1.6rem + 3.9vw), 4rem);    /* @kind font */
+  --text-display-md: clamp(2rem, calc(1.4rem + 2.6vw), 3rem);      /* @kind font */
+  --text-h1: clamp(1.9rem, calc(1.4rem + 1.9vw), 2.5rem);          /* @kind font */
+  --text-h2: clamp(1.5rem, calc(1.2rem + 1.2vw), 2rem);            /* @kind font */
+  --text-h3: clamp(1.25rem, calc(1.1rem + 0.6vw), 1.5rem);         /* @kind font */
+  --text-lead: clamp(1.125rem, calc(1.05rem + 0.4vw), 1.375rem);   /* @kind font */
+  --text-body: 1.0625rem;   /* @kind font */
+  --text-sm: 0.9375rem;     /* @kind font */
+  --text-xs: 0.8125rem;     /* @kind font */
+  --text-eyebrow: 0.8125rem; /* @kind font */
+
+  /* Line heights */
+  --lh-tight: 1.04;    /* @kind font */
+  --lh-snug: 1.18;     /* @kind font */
+  --lh-normal: 1.5;    /* @kind font */
+  --lh-relaxed: 1.65;  /* @kind font */
+
+  /* Letter spacing */
+  --ls-tight: -0.02em;    /* @kind font */
+  --ls-display: -0.015em; /* @kind font */
+  --ls-normal: 0;         /* @kind font */
+  --ls-eyebrow: 0.18em;   /* @kind font */
+  --ls-label: 0.04em;     /* @kind font */
+}

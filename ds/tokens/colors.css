@@ -1,0 +1,55 @@
+/* sey.la | book — Color tokens
+   Island boho-wellness palette. Warm shell grounds, clay brand, eucalyptus botanical. */
+
+:root {
+  /* ---- Base palette (exact brand values) ---- */
+  --shell: #F5EAE0;        /* warm shell — primary background */
+  --shell-alt: #EFE0D2;    /* alternate section background */
+  --cocoa: #3B2A25;        /* warm cocoa — text & dark sections */
+  --clay: #A8503F;         /* clay — brand / CTA */
+  --clay-hover: #8E4132;   /* clay pressed/hover */
+  --eucalyptus: #6F8265;   /* botanical green */
+  --blush: #ECD8CB;        /* petal / soft backgrounds */
+  --brass: #B2925F;        /* brass accent — use very sparingly */
+  --surface: #FCF8F2;      /* cards / raised surfaces */
+
+  /* ---- Derived neutrals (warm-tinted, from cocoa) ---- */
+  --cocoa-80: #574540;     /* softened body on light */
+  --cocoa-60: #7A6A64;     /* muted / secondary text */
+  --cocoa-40: #A99C96;     /* captions, disabled text */
+  --line: #E3D3C4;         /* hairline borders on shell */
+  --line-strong: #D8C4B2;  /* stronger dividers */
+
+  /* On-dark neutrals for cocoa sections */
+  --cream: #F5EAE0;        /* primary text on cocoa */
+  --cream-70: #C9B8AE;     /* secondary text on cocoa */
+  --cocoa-line: #55403A;   /* dividers on cocoa */
+
+  /* ---- Semantic aliases ---- */
+  --bg-page: var(--shell);
+  --bg-alt: var(--shell-alt);
+  --bg-soft: var(--blush);
+  --bg-dark: var(--cocoa);
+  --surface-card: var(--surface);
+
+  --text-heading: var(--cocoa);
+  --text-body: var(--cocoa-80);
+  --text-muted: var(--cocoa-60);
+  --text-caption: var(--cocoa-40);
+  --text-on-dark: var(--cream);
+  --text-on-dark-muted: var(--cream-70);
+
+  --brand: var(--clay);
+  --brand-hover: var(--clay-hover);
+  --accent-botanical: var(--eucalyptus);
+  --accent-brass: var(--brass);
+
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+
+  --focus-ring: var(--eucalyptus);
+
+  /* Success/confirmed states lean botanical (no generic green) */
+  --confirmed: var(--eucalyptus);
+  --confirmed-soft: #E4E9DF;
+}
