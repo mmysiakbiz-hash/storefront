@@ -3396,7 +3396,10 @@ function portionBandG(cut){ return cut==='whole' ? { lo:CFG.wholeLow, hi:CFG.who
 function impliedPeople(weightKg, cut){ return Math.max(1, Math.round(weightKg*1000 / perPortionG(cut))); }
 
 /* ---------- NAV ---------- */
+function tbReleaseAll(){ try{ var uids=[]; ((state.tb&&state.tb.items)||[]).forEach(function(it){ if(it.uids) uids=uids.concat(it.uids); }); if(uids.length){ fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'release',session:sid(),uids:uids})}).then(function(){ return loadUnits(); }).catch(function(){}); } if(state.tb) state.tb.items=[]; }catch(e){} }
+window.addEventListener('pagehide', function(){ try{ var uids=[]; ((state.tb&&state.tb.items)||[]).forEach(function(it){ if(it.uids) uids=uids.concat(it.uids); }); if(uids.length && navigator.sendBeacon){ navigator.sendBeacon(API_BASE+'/reservation', new Blob([JSON.stringify({action:'release',session:sid(),uids:uids})],{type:'application/json'})); } }catch(e){} });
 function go(screen){
+  try{ var _prev=state.screen; var _abandon={home:1,shop:1,orders:1,profile:1,cart:1}; if(_prev && _prev.indexOf('tb-')===0 && _prev!=='tb-success' && _abandon[screen] && state.tb && state.tb.items && state.tb.items.length){ tbReleaseAll(); } }catch(e){}
   state.screen = screen;
   document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
   var node = el('s-'+screen);
@@ -4499,7 +4502,7 @@ function tbAddFromProduct(){
   var recs=recsFor();
   var rec = recs.filter(function(r){return r.key===c.sel;})[0] || recs[0];
   if(!rec){ btnDone(_b); toast('No stock available for this choice.'); return; }
-  if(tbWeight()+rec.weight > tbCap()+1e-9){ btnDone(_b); toast('That would exceed the '+tbCap()+' kg Travel Box cap.'); return; }
+  if(tbWeight()+rec.weight > tbCap()+1e-9){ btnDone(_b); toast('That would exceed the '+tbCap()+' kg Travel Box cap — remove or reduce an item first.'); return; }
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'hold',session:sid(),uids:rec.uids,mode:'travel'})})
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,res:res}; }); })
     .then(function(o){
