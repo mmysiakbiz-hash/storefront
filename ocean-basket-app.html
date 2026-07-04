@@ -59,6 +59,12 @@ img{display:block; max-width:100%}
 .topbar .ico{color:#fff; opacity:.9; font-size:20px}
 
 /* ===== bottom nav ===== */
+.cartbar{position:fixed;bottom:var(--nav-h);left:50%;transform:translateX(-50%);width:100%;max-width:var(--max);z-index:45;display:none;gap:8px;padding:9px 12px;background:var(--paper);border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(0,0,0,.07)}
+.cartbar.show{display:flex}
+.cartbar button{border:0;border-radius:11px;font-weight:700;font-size:14.5px;font-family:inherit;padding:13px 10px;cursor:pointer;flex:1;white-space:nowrap}
+.cartbar .vb{background:#eef1f8;color:var(--ink)}
+.cartbar .co{background:var(--gilt);color:#fff}
+body.cartbar-on .screen{padding-bottom:62px}
 .bottomnav{
   position:fixed; bottom:0; left:50%; transform:translateX(-50%);
   width:100%; max-width:var(--max); height:var(--nav-h);
@@ -3056,7 +3062,8 @@ try{window.qrcode=module.exports;}catch(e){}})();
   </section>
 
   <!-- bottom nav -->
-  <nav class="bottomnav" id="bottomnav">
+  <div class="cartbar" id="cartbar"><button class="vb" onclick="go('cart')">View basket · <span id="cartbar-n">0</span></button><button class="co" onclick="go('delivery')">Checkout →</button></div>
+<nav class="bottomnav" id="bottomnav">
     <button data-nav="home" class="on" onclick="go('home')"><span class="nico" id="ni-home"></span>Home</button>
     <button data-nav="shop" onclick="go('shop')"><span class="nico" id="ni-shop"></span>Shop</button>
     <button data-nav="cart" onclick="go('cart')"><span class="nico cartbadge" id="ni-cart"><span class="cnt" id="navcart" style="display:none">0</span></span>Basket</button>
@@ -3401,6 +3408,7 @@ window.addEventListener('pagehide', function(){ try{ var uids=[]; ((state.tb&&st
 function go(screen){
   try{ var _prev=state.screen; var _abandon={home:1,shop:1,orders:1,profile:1,cart:1}; if(_prev && _prev.indexOf('tb-')===0 && _prev!=='tb-success' && _abandon[screen] && state.tb && state.tb.items && state.tb.items.length){ tbReleaseAll(); } }catch(e){}
   state.screen = screen;
+  try{ updateCartBar(); }catch(e){}
   document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
   var node = el('s-'+screen);
   if(node){ node.classList.add('active'); }
@@ -3715,9 +3723,11 @@ function closeAddedSheet(){ var o=document.getElementById('addedsheet'); if(o) o
 
 /* ---------- CART (v2 — reservation + countdown) ---------- */
 function cartSubtotal(){ return state.cart.reduce(function(s,i){return s+i.lineTotal},0); }
+function updateCartBar(){ var bar=el('cartbar'); if(!bar) return; var n=state.cart.length; var show = n>0 && (state.screen==='home' || state.screen==='shop'); if(show){ var c=el('cartbar-n'); if(c) c.textContent=n; bar.classList.add('show'); document.body.classList.add('cartbar-on'); } else { bar.classList.remove('show'); document.body.classList.remove('cartbar-on'); } }
 function updateCartBadge(){
   var n=state.cart.length, b=el('navcart');
   if(b){ if(n>0){ b.style.display='flex'; b.textContent=n; } else { b.style.display='none'; } }
+  updateCartBar();
 }
 function cartMinExp(){ if(!state.cart.length) return 0; return Math.min.apply(null, state.cart.map(function(l){ return l.exp||0; })); }
 function remainSec(){ var e=cartMinExp(); if(!e) return 0; return Math.max(0, Math.round((e-Date.now())/1000)); }
@@ -3956,7 +3966,7 @@ function renderPayment(){
       '<div class="row tot"><span class="k">Total to pay</span><span class="v">'+money2(total)+'</span></div>'+
     '</div>'+
     ''+
-    '<div style="margin-top:16px"><button class="btn gilt" id="payBtn" onclick="placeOrder()">\ud83d\udd12 Place order \u00b7 '+money2(total)+'</button></div>'+
+    '<div style="margin-top:16px"><button class="btn gilt" id="payBtn" onclick="placeOrder()">Place order \u00b7 '+money2(total)+'</button></div>'+
   '</div>';
 }
 function setPay(m){
@@ -4128,7 +4138,7 @@ function renderSuccess(order){
   el('success-host').innerHTML='<div class="success">'+
     '<div class="check"></div>'+
     '<div class="step3">Order placed</div>'+
-    '<h1>The kitchen has <em>your order.</em></h1>'+
+    '<h1>Great catch! Your order is <em>in.</em></h1>'+
     '<div class="ono">Order <b>'+order.no+'</b> \u00b7 keep this code</div>'+
     '<div class="receipt"><div class="rqr">'+qrSvg(order.no)+'</div><div class="rlabel">Collection code</div><div class="rcode">'+order.no+'</div>'+
       '<div class="rmeta">'+payTxt+' \u00b7 '+money2(order.total)+'</div>'+
