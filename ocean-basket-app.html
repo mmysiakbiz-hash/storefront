@@ -300,6 +300,11 @@ button.is-loading{pointer-events:none}
 /* success */
 .success{flex:1; display:flex; flex-direction:column; align-items:center; padding:44px 26px; text-align:center}
 .success .check{width:84px; height:84px; border-radius:50%; border:3px solid var(--ok); display:flex; align-items:center; justify-content:center; font-size:44px; color:var(--ok); margin-bottom:22px}
+.check .tick,.check .cross{width:46px;height:46px}
+.check .tick path{fill:none;stroke:var(--ok);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:48;stroke-dashoffset:48;animation:tickdraw .45s ease-out .12s forwards}
+.check.fail{border-color:var(--pink);color:var(--pink)}
+.check .cross path{fill:none;stroke:var(--pink);stroke-width:5;stroke-linecap:round;stroke-dasharray:26;stroke-dashoffset:26;animation:tickdraw .4s ease-out .1s forwards}
+@keyframes tickdraw{to{stroke-dashoffset:0}}
 .success .step3{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gilt); font-weight:700; margin-bottom:14px}
 .success h1{font-size:36px; font-weight:400; margin-bottom:10px}
 .success h1 em{font-style:normal; font-weight:700; color:var(--gilt)}
@@ -4096,7 +4101,7 @@ function startCardPayment(order){
   host.innerHTML='<div class="pad"><h2 style="margin:0 0 4px">Pay SCR '+Number(order.total).toFixed(2)+'</h2>'+
     '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px">Loading secure payment\u2026</div>'+
     '<div id="ob-uc-buttons"></div>'+
-    '<div id="pay-retry" style="display:none;margin-top:14px"><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a id="ob-cancel-link" href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
+    '<div id="pay-retry" style="display:none;margin-top:14px;text-align:center"><div class="check fail" style="margin:0 auto 14px"><svg class="cross" viewBox="0 0 52 52"><path d="M17 17l18 18M35 17l-18 18"/></svg></div><div style="font-weight:700;color:var(--ink);margin-bottom:10px">Payment could not be completed</div><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a id="ob-cancel-link" href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
   window.__payOrder=order;
   runUnifiedCheckout(order).catch(function(e){
     var m=el('pay-msg'); if(m){ m.textContent='Payment could not start: '+((e&&e.message)||e); }
@@ -4136,7 +4141,7 @@ function renderSuccess(order){
   var payTxt = order.payMethod==='cash' ? 'Pay on collection' : ('Paid \u00b7 '+(order.payMethod||'card'));
   state.lastTicket={ no:order.no, kindLabel:'Order', lines:[ where, payTxt+'  ·  '+money2(order.total) ], note:'Show this QR or quote the code at collection or delivery.' };
   el('success-host').innerHTML='<div class="success">'+
-    '<div class="check"></div>'+
+    '<div class="check"><svg class="tick" viewBox="0 0 52 52"><path d="M14 27l8 8 16-18"/></svg></div>'+
     '<div class="step3">Order placed</div>'+
     '<h1>Great catch! Your order is <em>in.</em></h1>'+
     '<div class="ono">Order <b>'+order.no+'</b> \u00b7 keep this code</div>'+
@@ -4666,7 +4671,7 @@ function tbSubmitDocs(){
 function renderTbSuccess(order, shop){
   state.lastTicket={ no:order.no, kindLabel:'Travel Box', lines:[ (order.boxesLabel||''), 'Total  '+money2(order.total), 'Status: certificate pending' ], note:'Bring your passport. Show this QR or quote the code at the shop.' };
   el('tb-success-host').innerHTML='<div class="success">'+
-    '<div class="check"></div>'+
+    '<div class="check"><svg class="tick" viewBox="0 0 52 52"><path d="M14 27l8 8 16-18"/></svg></div>'+
     '<div class="step3">Travel Box confirmed</div>'+
     '<h1>Packed for <em>your journey.</em></h1>'+
     '<div class="ono">Order <b>'+order.no+'</b> \u00b7 '+(order.boxesLabel||'')+'</div>'+
