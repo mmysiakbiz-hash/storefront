@@ -216,7 +216,7 @@ a{color:var(--ink)}
     <div class="panel" id="p-replenish"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-shops"><div class="loading">Loading…</div></div>
     <div class="panel" id="p-dispatch"><div style="padding:2px"><h2 style="margin:0 0 3px">Dispatch</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Assign packed orders to a driver for the day. The driver then sees them in “My run”.</p><div id="dispatch-body">Open this tab to load.</div></div></div>
-  <div class="panel" id="p-clients"><div style="padding:2px"><h2 style="margin:0 0 3px">Clients</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Grouped by email — every order, status, spend, and freezer→collection timing.</p><div id="clients-body">Open this tab to load.</div></div></div>
+  <div class="panel" id="p-clients"><div style="padding:2px"><h2 style="margin:0 0 3px">Clients</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Grouped by email — every order, status, spend, and freezer→collection timing.</p><div style="background:#fff;border:1px solid #e4ddcf;border-radius:10px;padding:14px;margin:0 0 16px"><div style="font-weight:700;color:#0a1140;margin-bottom:4px">Delete customer data (privacy request)</div><div style="color:#857f74;font-size:12.5px;margin-bottom:10px">Anonymises all orders for this customer (removes name, phone, email, address and any passport/cert data) and deletes their account. Order records are kept but made anonymous. This cannot be undone.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="del-cust-email" type="email" placeholder="Customer email" style="flex:1;min-width:200px;padding:10px;border:1px solid #e4ddcf;border-radius:8px;font:14px inherit"><input id="del-cust-phone" type="tel" placeholder="or phone" style="width:140px;padding:10px;border:1px solid #e4ddcf;border-radius:8px;font:14px inherit"><button onclick="deleteCustomerData()" style="background:#b5573a;color:#fff;border:0;border-radius:8px;padding:11px 16px;font-weight:700;cursor:pointer">Delete data</button></div><div id="del-cust-msg" style="font-size:13px;margin-top:8px"></div></div><div id="clients-body">Open this tab to load.</div></div></div>
   <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
   </div>
 </div>
@@ -268,6 +268,29 @@ function signInPassword(){
 function signOut(){ sb.auth.signOut().then(function(){ location.reload(); }); }
 
 /* check session on load + after magic-link redirect */
+async function deleteCustomerData(){
+  var email=((document.getElementById('del-cust-email')||{}).value||'').trim();
+  var phone=((document.getElementById('del-cust-phone')||{}).value||'').trim();
+  var msg=document.getElementById('del-cust-msg');
+  if(!email && !phone){ if(msg){msg.style.color='#b5573a'; msg.textContent='Enter an email or phone.';} return; }
+  if(!confirm('Permanently delete and anonymise this customer data? This cannot be undone.')) return;
+  var sess=await sb.auth.getSession();
+  var token=(sess&&sess.data&&sess.data.session)?sess.data.session.access_token:null;
+  if(!token){ toast('Session expired'); return; }
+  if(msg){ msg.style.color='#857f74'; msg.textContent='Deleting...'; }
+  try{
+    var resp=await fetch('https://storekit-pi.vercel.app/api/ocean-basket/v2/delete-customer',{
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({ email:email||undefined, phone:phone||undefined })
+    });
+    var data=await resp.json();
+    if(!resp.ok){ if(msg){msg.style.color='#b5573a'; msg.textContent='Failed: '+(data.error||resp.status);} return; }
+    if(msg){ msg.style.color='#3f7a5a'; msg.textContent='Done - '+data.orders_anonymised+' order(s) anonymised'+(data.account_deleted?', account deleted.':'.'); }
+    var e=document.getElementById('del-cust-email'); if(e) e.value='';
+    var p=document.getElementById('del-cust-phone'); if(p) p.value='';
+    if(typeof renderClients==='function') renderClients();
+  }catch(err){ if(msg){msg.style.color='#b5573a'; msg.textContent='Error: '+err.message;} }
+}
 function boot(){
   sb.auth.getSession().then(function(res){
     var session=res.data.session;
