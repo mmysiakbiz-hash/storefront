@@ -3348,6 +3348,7 @@ var SHOP_STOCK = {};  /* product_id -> shop_id -> state -> cut -> kg; filled fro
 /* ---------- STATE ---------- */
 var state = {
   screen:'home',
+  loyalty:null,
   cat:'all',
   product:null,      // current species being configured
   cfg:{ formIdx:0, people:3, grams:750 },
@@ -3425,7 +3426,7 @@ function go(screen){
   // render per screen
   if(screen==='shop'){ renderCats(); renderAvailBanner(); renderSpecies(); }
   if(screen==='cart'){ renderCart(); }
-  if(screen==='delivery'){ renderDelivery(); }
+  if(screen==='delivery'){ renderDelivery(); loadLoyalty(); }
   if(screen==='map'){ state.allStock=null; renderMap(); }
   if(screen==='payment'){ renderPayment(); }
   if(screen==='orders'){ renderOrders(); }
@@ -3861,9 +3862,12 @@ startCartTimer();
 setInterval(syncGlobalHold, 1000);
 
 /* ---------- DELIVERY ---------- */
+function loadLoyalty(){ try{ if(!(window.sbc && window.OB_USER && window.OB_USER.email)){ state.loyalty=null; return; } window.sbc.rpc('ob_my_loyalty',{p_store:window.OB_STORE}).then(function(r){ state.loyalty=(r&&r.data)?r.data:null; if(state.screen==='delivery' && typeof renderDelivery==='function') renderDelivery(); }).catch(function(){ state.loyalty=null; }); }catch(e){} }
 function renderDelivery(){
   var sub=cartSubtotal();
   var deliveryFee = sub>=CFG.freeFrom ? 0 : CFG.deliveryFee;
+  var loyaltyFree = deliveryFee>0 && window.OB_USER && window.OB_USER.email && state.loyalty && Number(state.loyalty.available)>0;
+  if(loyaltyFree) deliveryFee = 0;
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
   var ptName=pt?pt.name:'—';
   var host=el('delivery-host'); if(!host) return;
@@ -3875,7 +3879,7 @@ function renderDelivery(){
       '<span class="radio"></span><div class="oc"><div class="ot"><h4>Collect from a point</h4><span class="fee free">FREE</span></div>'+
       '<p>Pick up at any of our 10 Mahé points. '+(pt?('Selected: <b>'+pt.id+' '+ptName+'</b> — tap to change.'):'Tap to choose your point on the map.')+'</p></div></button>'+
     '<button class="opt'+(state.fulfil==='delivery'?' on':'')+'" onclick="pickDoor()">'+
-      '<span class="radio"></span><div class="oc"><div class="ot"><h4>Door-to-door delivery</h4><span class="fee'+(deliveryFee===0?' free':'')+'">'+(deliveryFee===0?'FREE \u00b7 GOLD':money(deliveryFee)+' \u00b7 SILVER')+'</span></div>'+
+      '<span class="radio"></span><div class="oc"><div class="ot"><h4>Door-to-door delivery</h4><span class="fee'+(deliveryFee===0?' free':'')+'">'+(deliveryFee===0?(loyaltyFree?'FREE \u00b7 LOYALTY':'FREE \u00b7 GOLD'):money(deliveryFee)+' \u00b7 SILVER')+'</span></div>'+
       '<p>We deliver to your address on Mahé. Free (GOLD) from '+money(CFG.freeFrom)+', otherwise '+money(CFG.deliveryFee)+' (SILVER).</p></div></button>'+
   '</div>';
 }
