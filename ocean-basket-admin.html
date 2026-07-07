@@ -777,7 +777,20 @@ async function userSave(id){
     else { showInviteLink(email, out.invite_link, out.email_error); }
   }catch(e){ toast('Network error \u2014 try again'); }
 }
-function userSetActive(email, on){
+async function userSetActive(email, on){
+  if(!on){
+    try{
+      var r = await sb.rpc('ob_driver_open_runs',{p_store:STORE_ID, p_email:email});
+      var open = (r && r.data) ? Number(r.data) : 0;
+      if(open>0){
+        var to = prompt('This driver still has '+open+' delivery(ies) out for delivery. Enter the email of another ACTIVE driver to move them to, or press Cancel to stop:');
+        if(!to){ toast('Deactivation cancelled'); return; }
+        var rr = await sb.rpc('ob_reassign_driver',{p_store:STORE_ID, p_from:email, p_to:to.trim()});
+        if(rr.error){ toast('Reassign failed: '+rr.error.message); return; }
+        toast('Moved '+(rr.data||0)+' order(s) to '+to.trim());
+      }
+    }catch(e){}
+  }
   sb.from('ob_staff').update({active:on}).eq('store_id',STORE_ID).eq('email',email).then(function(res){
     if(res.error){ toast('Error: '+res.error.message); return; }
     toast((on?'Reactivated \u00b7 ':'Deactivated \u00b7 ')+email); Promise.resolve(loadStaff()).then(renderUsers);
