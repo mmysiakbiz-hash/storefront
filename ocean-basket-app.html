@@ -3863,6 +3863,7 @@ setInterval(syncGlobalHold, 1000);
 
 /* ---------- DELIVERY ---------- */
 function loadLoyalty(){ try{ if(!(window.sbc && window.OB_USER && window.OB_USER.email)){ state.loyalty=null; return; } window.sbc.rpc('ob_my_loyalty',{p_store:window.OB_STORE}).then(function(r){ state.loyalty=(r&&r.data)?r.data:null; if(state.screen==='delivery' && typeof renderDelivery==='function') renderDelivery(); }).catch(function(){ state.loyalty=null; }); }catch(e){} }
+function deliveryPromise(){ try{ var sc=new Date(Date.now()+4*3600*1000); var before=sc.getUTCHours()<7; var day=before?'today':'tomorrow'; return 'Estimated delivery: '+day+', 11:00\u201315:00'; }catch(e){ return 'Estimated delivery: 11:00\u201315:00'; } }
 function renderDelivery(){
   var sub=cartSubtotal();
   var deliveryFee = sub>=CFG.freeFrom ? 0 : CFG.deliveryFee;
@@ -3880,7 +3881,7 @@ function renderDelivery(){
       '<p>Pick up at any of our 10 Mahé points. '+(pt?('Selected: <b>'+pt.id+' '+ptName+'</b> — tap to change.'):'Tap to choose your point on the map.')+'</p></div></button>'+
     '<button class="opt'+(state.fulfil==='delivery'?' on':'')+'" onclick="pickDoor()">'+
       '<span class="radio"></span><div class="oc"><div class="ot"><h4>Door-to-door delivery</h4><span class="fee'+(deliveryFee===0?' free':'')+'">'+(deliveryFee===0?(loyaltyFree?'FREE \u00b7 LOYALTY':'FREE \u00b7 GOLD'):money(deliveryFee)+' \u00b7 SILVER')+'</span></div>'+
-      '<p>We deliver to your address on Mahé. Free (GOLD) from '+money(CFG.freeFrom)+', otherwise '+money(CFG.deliveryFee)+' (SILVER).</p></div></button>'+
+      '<p>We deliver to your address on Mahé. Free (GOLD) from '+money(CFG.freeFrom)+', otherwise '+money(CFG.deliveryFee)+' (SILVER).<br><b style="color:#3f7a5a">'+deliveryPromise()+' \u00b7 cut-off 7:00 each morning'+'</b></p></div></button>'+
   '</div>';
 }
 function setFulfil(f){ state.fulfil=f; renderDelivery(); }
