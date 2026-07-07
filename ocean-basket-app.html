@@ -3956,10 +3956,10 @@ function renderPayment(){
   }).join('');
 
   el('payment-host').innerHTML='<div class="pad">'+
-    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'')+
+    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'<div style="background:#eef4fb;border:1px solid #d5e3f2;border-radius:9px;padding:10px 12px;margin:-2px 0 14px;font-size:13px;color:#0a1140">Have an account? <a onclick="go(\'account\')" style="color:#1ba8d3;font-weight:700;cursor:pointer">Sign in</a> for faster checkout, or <a onclick="go(\'account\')" style="color:#1ba8d3;font-weight:700;cursor:pointer">create one</a> to save your details.</div>')+
     '<div class="field"><label>Full name</label><input id="f-name" oninput="state.customer.name=this.value" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
-    '<div class="field"><label>Phone (WhatsApp)</label><input id="f-phone" oninput="state.customer.phone=this.value" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
-    '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+
+    '<div class="field"><label>WhatsApp / mobile number</label><input id="f-phone" oninput="state.customer.phone=this.value" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
+    '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+ '<div style="font-size:12px;color:#857f74;margin:-6px 0 12px">We send order updates to your WhatsApp number \u2014 add an email if you prefer that instead.</div>'+
     addressFields+
     '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
     '<p style="font-size:12px;color:#8a8577;margin:8px 2px 0">Google Pay and Apple Pay may also appear at the payment step, on supported devices.</p>'+
