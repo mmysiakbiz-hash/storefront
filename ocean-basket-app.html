@@ -4279,6 +4279,47 @@ function lookupOrder(){
     saveOrderNo(code); inp.value=''; renderOrders();
   }).catch(function(){ inp.disabled=false; toast('Could not check \u2014 connection problem.'); }).finally(function(){ btnDone(_b); });
 }
+async function reorder(no){
+  if(!(window.OB_USER && window.OB_USER.email)){ toast('Sign in to reorder'); return; }
+  var o=(window.__ordersById||{})[no];
+  if(!o || !o.items || !o.items.length){ toast('Nothing to reorder here'); return; }
+  toast('Finding current stock\u2026');
+  try{ await loadUnits(); }catch(e){}
+  var picked=[], missing=[], used={};
+  o.items.forEach(function(it){
+    var sp=speciesById(it.product_id); if(!sp){ missing.push(it.product_name||it.product_id); return; }
+    var units=unitsForSel(sp, it.state, it.cut).filter(function(u){ return !used[u.uid]; });
+    if(!units.length){ missing.push(it.product_name||sp.name); return; }
+    var targetG=Number(it.weight_kg||0)*1000;
+    units.sort(function(a,b){ return Math.abs(a.weight_kg*1000-targetG)-Math.abs(b.weight_kg*1000-targetG); });
+    var u=units[0]; used[u.uid]=1; picked.push({sp:sp,it:it,u:u});
+  });
+  if(!picked.length){ toast('Those items are out of stock right now'); return; }
+  var uids=picked.map(function(p){ return p.u.uid; });
+  try{
+    var r=await fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'hold',session:sid(),uids:uids,mode:'local'})});
+    var res=await r.json();
+    if(!r.ok || (res && res.ok===false)){ toast('Could not hold stock \u2014 try again.'); try{ await loadUnits(); }catch(e){} return; }
+    var secs=(res && res.expires_in)?res.expires_in:300;
+    picked.forEach(function(p){
+      var sp=p.sp, u=p.u, st=p.it.state, cut=p.it.cut;
+      state.cart.push({
+        uid:'L'+Date.now()+Math.random().toString(36).slice(2,5),
+        speciesId:sp.id, name:sp.name, photo:sp.photo,
+        state:st, cut:cut,
+        formId:sp.id+'-'+st+'-'+cut,
+        formLabel:(CUTLBL[cut]+' ('+st+')'),
+        people:Math.max(1,Math.round((u.weight_kg*1000)/perPortionG(cut))),
+        uids:[u.uid], weight:u.weight_kg, grams:Math.round(u.weight_kg*1000),
+        price:u.total, lineTotal:u.total, exp:Date.now()+secs*1000, extended:false
+      });
+    });
+    updateCartBadge();
+    try{ await loadUnits(); }catch(e){}
+    toast(missing.length ? (picked.length+' added \u00b7 '+missing.length+' out of stock') : ('Added '+picked.length+' item'+(picked.length>1?'s':'')+' \u2014 weights re-picked from today\u2019s stock'));
+    go('cart');
+  }catch(e){ toast('Network problem \u2014 try again.'); }
+}
 async function renderOrders(){
   var host=el('orders-host');
   host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px"><div class="muted" style="font-size:13px">Loading\u2026</div></div>';
@@ -4310,7 +4351,30 @@ async function renderOrders(){
       return fetchStatus(o.order_no).then(function(r){ if(r && r.items && r.items.length) o.items=r.items; }).catch(function(){});
     }));
   }catch(e){}
-  var oh=el('orders-live'); if(oh){ oh.innerHTML = all.length ? all.map(orderCardLive).join('') : emptyOrdersHTML(); }
+  var HIST=['completed','collected','cancelled','refunded'];
+  var active=all.filter(function(o){ return HIST.indexOf(o.status)<0; });
+  var past=all.filter(function(o){ return HIST.indexOf(o.status)>=0; });
+  try{ window.__ordersById={}; all.forEach(function(o){ if(o&&o.order_no) window.__ordersById[o.order_no]=o; }); }catch(e){}
+  var oh=el('orders-live');
+  if(oh){
+    var html='';
+    if(!all.length){ html=emptyOrdersHTML(); }
+    else {
+      html = active.length ? active.map(orderCardLive).join('')
+                           : '<div class="muted" style="font-size:13px;padding:2px 0 8px">No active orders right now.</div>';
+      if(past.length){
+        html += '<button id="ob-hist-toggle" class="btn ghost" style="width:100%;margin-top:6px" onclick="obToggleHistory()">Show past orders ('+past.length+')</button>'+
+                '<div id="ob-history" style="display:none;margin-top:12px">'+past.map(orderCardLive).join('')+'</div>';
+      }
+    }
+    oh.innerHTML=html;
+  }
+}
+function obToggleHistory(){
+  var h=el('ob-history'), b=el('ob-hist-toggle'); if(!h||!b) return;
+  var open=h.style.display!=='none';
+  h.style.display=open?'none':'block';
+  b.textContent=open ? b.textContent.replace('Hide','Show') : b.textContent.replace('Show','Hide');
 }
 function orderWhereLive(o){
   if(o.type==='travel'){ var sh=SHOPS.filter(function(x){return x.id===o.shop_id;})[0]; return 'Travel Box'+(o.boxes_label?(' \u00b7 '+o.boxes_label):'')+(sh?(' \u00b7 '+sh.name):''); }
@@ -4350,19 +4414,24 @@ function orderCardLive(o){
     // the handover. The QR button stays disabled here as a visual cue to scan first; the
     // scan step (and enabling the QR after both scans) is finished once the collection model
     // is confirmed with the client. For now both are shown with clear instructions.
+    var __oriented=false; try{ __oriented=!!localStorage.getItem('ob_oriented_'+o.order_no); }catch(e){}
     readyCTA='<div style="margin-top:16px;padding:16px;border:1px solid #3f7a5a;background:#edf3ee;border-radius:12px;text-align:center">'+
       '<div style="font-weight:800;color:#2f5e46;margin-bottom:4px">Ready for collection</div>'+
       '<div style="font-size:13px;color:#4a6b58;margin-bottom:12px">Your order is in freezer '+o.drop_point_id+' at the collection point.</div>'+
-      '<div style="font-size:12.5px;color:#4a6b58;margin-bottom:8px">Step 1 \u2014 scan the freezer and your bag to check you have the right pack.</div>'+
-      '<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:#0a1140;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">Scan freezer &amp; bag</a>'+
-      '<div style="font-size:12.5px;color:#8a8577;margin:14px 0 8px">Step 2 \u2014 then show this QR to staff at the exit to complete pickup.</div>'+
-      '<button class="btn ghost" disabled style="width:100%;opacity:.5;cursor:not-allowed">Show collection QR</button>'+
+      '<div style="font-size:12.5px;color:#4a6b58;margin-bottom:8px">Step 1 \u2014 scan the freezer and your bag to check you have the right pack.'+(__oriented?' \u2713':'')+'</div>'+
+      '<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:'+(__oriented?'#3f7a5a':'#0a1140')+';color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">'+(__oriented?'Scan again':'Scan freezer &amp; bag')+'</a>'+
+      '<div style="font-size:12.5px;color:#8a8577;margin:14px 0 8px">Step 2 \u2014 '+(__oriented?'now show this QR to staff at the exit to complete pickup.':'then show this QR to staff at the exit to complete pickup.')+'</div>'+
+      (__oriented
+        ? '<button class="btn" style="width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>'
+        : '<button class="btn ghost" disabled style="width:100%;opacity:.5;cursor:not-allowed">Show collection QR</button>')+
     '</div>';
   } else if(isColl && !cancelled && o.status!=='pending_payment' && o.status!=='completed' && o.status!=='collected'){
     // Before "ready" (e.g. preparing/packed): let the customer view their QR normally.
     qrCTA='<button class="btn ghost" style="margin-top:12px;width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>';
   }
   var __items=orderItemsSummary(o);
+  var __finished=(o.status==='collected'||o.status==='completed'||o.status==='cancelled'||o.status==='refunded');
+  var reorderCTA=((window.OB_USER&&window.OB_USER.email)&&__finished&&o.items&&o.items.length) ? '<button class="btn ghost" style="margin-top:12px;width:100%" onclick="reorder(\''+o.order_no+'\')">Order again</button>' : '';
   return '<div class="track-card">'+
     '<div class="track-head"><div style="min-width:0">'+
       (__items || '<div class="track-no">'+o.order_no+'</div>')+
@@ -4370,7 +4439,7 @@ function orderCardLive(o){
       '<div class="track-meta">'+money2(o.total)+' \u00b7 '+orderWhereLive(o)+'</div></div>'+
       '<div class="track-stat">'+statLabel+'</div></div>'+
       (cancelled ? '<div class="info-banner" style="background:#fbeae5;border-color:#f0c4b8;color:#a8341a;margin-top:12px">This order was '+o.status+'.</div>'
-                 : '<div class="timeline" style="margin-top:14px">'+steps+'</div>')+ readyCTA + qrCTA + payCTA +
+                 : '<div class="timeline" style="margin-top:14px">'+steps+'</div>')+ readyCTA + qrCTA + payCTA + reorderCTA +
   '</div>';
 }
 function orderCardLocal(o){
