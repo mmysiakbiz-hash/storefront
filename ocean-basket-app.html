@@ -3760,7 +3760,7 @@ function renderCart(){
 
   var items='<div class="cart-items">'+state.cart.map(function(it){
     var dot = it.state==='fresh'?'<span class="tag fresh" style="padding:2px 7px;font-size:9px">Fresh</span>':'<span class="tag frozen" style="padding:2px 7px;font-size:9px">Frozen</span>';
-    var thumb = it.photo ? '<img src="'+it.photo+'" alt="">' : svg(iconForId(it.speciesId),30,1.3);
+    var thumb = it.photo ? '<img src="'+it.photo+'" alt="">' : '<span class="fishline">'+svg(iconForId(it.speciesId),34,1.2)+'</span>';
     var isB = it.cut==='bottle';
     var meta = isB ? 'Bottle' : (it.formLabel+' \u00b7 ~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)+' '+dot);
     return '<div class="cart-item">'+
@@ -4185,19 +4185,36 @@ async function runUnifiedCheckout(order){
   // (not before -> empty gap, not after -> spinner over ready buttons). Watch the
   // container for injected children; fall back to a timer in case the observer misses.
   var __revealed=false;
+  var __t0=Date.now();
   function __reveal(){
-    if(__revealed) return; __revealed=true;
-    var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
-    if(msg){ msg.textContent='Choose how to pay below.'; }
+    if(__revealed) return;
+    // Never flash the spinner away too fast (min 700ms) — avoids a jarring blink.
+    var __wait=Math.max(0, 700-(Date.now()-__t0));
+    __revealed=true;
+    setTimeout(function(){
+      var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
+      if(msg){ msg.textContent='Choose how to pay below.'; }
+    }, __wait);
   }
-  // DOM/child/height detection is unreliable here: Cybersource renders the buttons inside
-  // a cross-origin iframe that mounts (and reports height) BEFORE the buttons actually
-  // paint, so any "child appeared"/"has height" check hides the spinner too early and
-  // leaves an empty gap. Instead keep the spinner up for a fixed window that comfortably
-  // covers the button paint, then reveal. It never waits for the user to pick a method.
+  // Cybersource renders the payment buttons inside a cross-origin iframe. The reliable
+  // signal that the buttons are ready is that iframe's own "load" event (fires when its
+  // content finishes loading) — far better than guessing by height/children/time. We poll
+  // briefly for the iframe, then reveal on its load (or a short settle after we spot it).
+  var __box=el('ob-uc-buttons');
+  var __seek=setInterval(function(){
+    var f=__box?__box.querySelector('iframe'):null;
+    if(f){
+      clearInterval(__seek);
+      try{ f.addEventListener('load', function(){ __reveal(); }); }catch(e){}
+      // Settle window after the iframe appears (covers 'load already fired' + paint).
+      setTimeout(__reveal, 900);
+    }
+  }, 100);
   var __showP=up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
-  setTimeout(__reveal, 2200);
+  // Absolute safety net so the spinner can never get stuck.
+  setTimeout(__reveal, 6000);
   var token=await __showP;
+  clearInterval(__seek);
   // Payment method chosen + completed -> now we're finalising. Bring back a clear state.
   var __plt2=el('pay-loader');
   if(__plt2){ __plt2.style.display='flex'; var __t2=__plt2.querySelector('.t'); if(__t2) __t2.textContent='Confirming payment\u2026'; var __s2=__plt2.querySelector('.s'); if(__s2) __s2.textContent='Please wait \u2014 don\u2019t close this page.'; }
@@ -4626,7 +4643,7 @@ function renderTbBox(){
   var perBox=CFG.servicePerBox!=null?CFG.servicePerBox:80;
   var lines = state.tb.items.map(function(it){
     var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams));
-    return '<div class="cart-item"><div class="ph">'+(it.photo?'<img src="'+it.photo+'" alt="">':svg(iconForId(it.speciesId),30,1.3))+'</div>'+
+    return '<div class="cart-item"><div class="ph">'+(it.photo?'<img src="'+it.photo+'" alt="">':'<span class="fishline">'+svg(iconForId(it.speciesId),34,1.2)+'</span>')+'</div>'+
       '<div class="info"><h4>'+it.name+'</h4><div class="meta">'+lbl+'</div>'+
       '<div class="ln"><span class="lt">'+money2(it.price)+'</span><button class="rm" onclick="tbRemove(\''+it.uid+'\')">Remove</button></div></div></div>';
   }).join('');
