@@ -3994,6 +3994,7 @@ function placeOrder(){
   if(!name||!phone){ toast('Please add your name and phone'); return; }
   state.customer.name=name; state.customer.phone=phone;
   state.customer.email=(window.OB_USER&&window.OB_USER.email)?window.OB_USER.email:(el('f-email')?el('f-email').value.trim():'');
+  if(state.payMethod==='card' && !state.customer.email){ toast('Please add your email for the card receipt'); if(el('f-email')) el('f-email').focus(); return; }
   if(el('f-address')) state.customer.address=el('f-address').value.trim();
   if(state.fulfil==='delivery' && !state.customer.address){ toast('Please add a delivery address'); return; }
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
@@ -4122,8 +4123,11 @@ function startCardPayment(order){
 }
 async function runUnifiedCheckout(order){
   var msg=el('pay-msg');
+  var __c=(typeof state!=='undefined'&&state.customer)||{};
+  var __u=window.OB_USER||{};
   var r=await fetch(API_BASE+'/capture-context',{ method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ amount:Number(order.total), orderId:order.no, clientVersion:'0.28' }) });
+    body: JSON.stringify({ amount:Number(order.total), orderId:order.no, clientVersion:'0.28',
+      email:(__u.email||__c.email||''), phone:(__c.phone||__u.phone||''), name:(__c.name||__u.name||'') }) });
   var cc=await r.text();
   if(!r.ok || cc.indexOf('eyJ')!==0){ throw new Error('capture context HTTP '+r.status); }
   var payload=b64urlToJson(cc.split('.')[1]);
@@ -4139,8 +4143,9 @@ async function runUnifiedCheckout(order){
   var __plt=el('pay-loader'); if(__plt){ var __t=__plt.querySelector('.t'); if(__t) __t.textContent='Opening secure checkout\u2026'; var __sub=__plt.querySelector('.s'); if(__sub) __sub.textContent='A secure payment window will appear.'; }
   if(msg) msg.textContent='';
   var token=await up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
-  var __plt2=el('pay-loader'); if(__plt2) __plt2.style.display='none';
-  if(msg) msg.textContent='Confirming payment\u2026';
+  var __plt2=el('pay-loader');
+  if(__plt2){ __plt2.style.display='flex'; var __t2=__plt2.querySelector('.t'); if(__t2) __t2.textContent='Confirming payment\u2026'; var __s2=__plt2.querySelector('.s'); if(__s2) __s2.textContent='Please wait \u2014 don\u2019t close this page.'; }
+  if(msg) msg.textContent='';
   var cr=await fetch(API_BASE+'/confirm-payment',{ method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ transientToken:token, amount:Number(order.total), orderId:order.no }) });
   var cj=await cr.json();
