@@ -3574,6 +3574,15 @@ function renderSpecies(){
 
 /* ---------- PRODUCT / CONFIGURE (v2 — packs model) ---------- */
 /* pack-fit engine (spec): exact -> combination -> closest */
+function unitAgeKey(u){
+  // Oldest-first key for perishable rotation. Prefer a real expiry/intake date
+  // once CloudPOS sends one (FEFO); until then fall back to the trailing number
+  // in the unit code (WRS07 -> 7), which reflects intake order within a batch.
+  // created_at is the sync timestamp (uniform), so it is NOT used here.
+  if(u && u.use_by){ var t=Date.parse(u.use_by); if(!isNaN(t)) return t; }
+  var m=String((u && u.uid) || "").match(/(\d+)\s*$/);
+  return m ? parseInt(m[1],10) : Number.MAX_SAFE_INTEGER;
+}
 function recsFor(){
   var s=state.product, c=state.cfg;
   if(s.type==='bottle'){
@@ -3583,8 +3592,12 @@ function recsFor(){
   var people=c.people||1, per=perPortionG(c.cut), band=portionBandG(c.cut);
   var targetG=people*per, loG=people*band.lo, hiG=people*band.hi;
   var items=unitsForSel(s,c.state,c.cut).slice();
+  // 1) size-relevant candidates first (closest to the requested size)
   items.sort(function(a,b){ return Math.abs(a.weight_kg*1000-targetG) - Math.abs(b.weight_kg*1000-targetG); });
-  return items.slice(0,5).map(function(u){
+  var picked=items.slice(0,5);
+  // 2) FIFO within that set: oldest stock first (perishable rotation)
+  picked.sort(function(a,b){ return unitAgeKey(a)-unitAgeKey(b); });
+  return picked.map(function(u){
     var g=u.weight_kg*1000, ppl=Math.max(1,Math.round(g/per)), inBand=(g>=loG-1e-6 && g<=hiG+1e-6);
     var title = inBand ? ('Good fit \u00b7 ~'+ppl+(ppl>1?' people':' person'))
                        : ((g>targetG?'A bit more':'A bit less')+' \u00b7 ~'+ppl+(ppl>1?' people':' person'));
