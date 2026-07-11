@@ -4131,11 +4131,12 @@ async function runUnifiedCheckout(order){
   if(!d.clientLibrary){ throw new Error('payment library missing'); }
   if(typeof Accept==='undefined'){ await obLoadPaySdk(d.clientLibrary, d.clientLibraryIntegrity); }
   if(typeof Accept==='undefined'){ throw new Error('payment library did not initialise'); }
-  if(msg) msg.textContent='Enter your card details below.';
   var accept=await Accept(cc);
   var up=await accept.unifiedPayments();
-  var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
-  var token=await up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
+  var __show=up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
+  // Give the widget a beat to paint its fields, THEN swap the spinner for the form.
+  setTimeout(function(){ var __pl=el('pay-loader'); if(__pl) __pl.style.display='none'; if(msg) msg.textContent='Enter your card details below.'; }, 600);
+  var token=await __show;
   if(msg) msg.textContent='Confirming payment\u2026';
   var cr=await fetch(API_BASE+'/confirm-payment',{ method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ transientToken:token, amount:Number(order.total), orderId:order.no }) });
