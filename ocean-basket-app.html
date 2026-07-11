@@ -4343,8 +4343,25 @@ function orderCardLive(o){
   var statLabel = cancelled ? o.status : (o.status==='certificate_pending' ? 'Certificate pending' : STATUS_FLOW[idx].label);
   var isColl=(o.type!=='travel' && o.fulfilment!=='door' && o.drop_point_id);
   var payCTA=(o.status==='pending_payment') ? '<div style="margin-top:16px;padding:14px;border:1px solid #a8341a;background:#fbeae5;border-radius:12px;text-align:center"><div style="font-weight:800;color:#a8341a;margin-bottom:8px">Payment not completed</div><button class="btn" onclick="payPending(\''+o.order_no+'\','+Number(o.total||0)+')">Complete payment</button></div>' : '';
-  var readyCTA=(o.status==='ready' && isColl) ? '<div style="margin-top:16px;padding:16px;border:1px solid #3f7a5a;background:#edf3ee;border-radius:12px;text-align:center">'+'<div style="font-weight:800;color:#2f5e46;margin-bottom:4px">Ready for collection</div>'+'<div style="font-size:13px;color:#4a6b58;margin-bottom:13px">Your order is in freezer '+o.drop_point_id+' at the collection point. Scan at the freezer to confirm pickup.</div>'+'<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:#0a1140;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">Scan to collect</a>'+'</div>' : '';
-  var qrCTA=(isColl && !cancelled && o.status!=='pending_payment' && o.status!=='completed' && o.status!=='collected') ? '<button class="btn ghost" style="margin-top:12px;width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>' : '';
+  var readyCTA='', qrCTA='';
+  if(o.status==='ready' && isColl){
+    // At the collection point the customer: (1) scans the freezer + their bag to make sure
+    // they're taking the right pack, then (2) shows the QR to staff at the exit, who confirm
+    // the handover. The QR button stays disabled here as a visual cue to scan first; the
+    // scan step (and enabling the QR after both scans) is finished once the collection model
+    // is confirmed with the client. For now both are shown with clear instructions.
+    readyCTA='<div style="margin-top:16px;padding:16px;border:1px solid #3f7a5a;background:#edf3ee;border-radius:12px;text-align:center">'+
+      '<div style="font-weight:800;color:#2f5e46;margin-bottom:4px">Ready for collection</div>'+
+      '<div style="font-size:13px;color:#4a6b58;margin-bottom:12px">Your order is in freezer '+o.drop_point_id+' at the collection point.</div>'+
+      '<div style="font-size:12.5px;color:#4a6b58;margin-bottom:8px">Step 1 \u2014 scan the freezer and your bag to check you have the right pack.</div>'+
+      '<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:#0a1140;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">Scan freezer &amp; bag</a>'+
+      '<div style="font-size:12.5px;color:#8a8577;margin:14px 0 8px">Step 2 \u2014 then show this QR to staff at the exit to complete pickup.</div>'+
+      '<button class="btn ghost" disabled style="width:100%;opacity:.5;cursor:not-allowed">Show collection QR</button>'+
+    '</div>';
+  } else if(isColl && !cancelled && o.status!=='pending_payment' && o.status!=='completed' && o.status!=='collected'){
+    // Before "ready" (e.g. preparing/packed): let the customer view their QR normally.
+    qrCTA='<button class="btn ghost" style="margin-top:12px;width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>';
+  }
   var __items=orderItemsSummary(o);
   return '<div class="track-card">'+
     '<div class="track-head"><div style="min-width:0">'+
