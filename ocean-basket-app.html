@@ -3791,7 +3791,7 @@ function renderCart(){
 
   var cta = rs>0 ? '<button class="btn" onclick="go(\'delivery\')">Choose delivery \u2192</button>'
                  : '<button class="btn" disabled>Hold expired \u2014 add items again</button>';
-  host.innerHTML = holdBar + items + upsell + summary +
+  host.innerHTML = items + upsell + summary +
     '<div class="pad">'+cta+'<button class="btn ghost" style="margin-top:10px" onclick="go(\'shop\')">Continue shopping</button></div>';
 }
 
@@ -3845,7 +3845,7 @@ function ensureGlobalHold(){
   if(document.getElementById('globalhold')) return;
   var d=document.createElement('div'); d.id='globalhold';
   d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:300;display:none';
-  d.innerHTML='<div style="max-width:520px;margin:0 auto;background:#f5a623;color:#0a1140;display:flex;align-items:center;gap:10px;padding:10px 14px;box-shadow:0 2px 14px rgba(0,0,0,.35)">'+
+  d.innerHTML='<div class="gh-inner" style="max-width:520px;margin:0 auto;background:#f5a623;color:#0a1140;display:flex;align-items:center;gap:10px;padding:10px 14px;box-shadow:0 2px 14px rgba(0,0,0,.35)">'+
     '<span class="gh-cd" style="font-family:\'Bodoni Moda\',Didot,Georgia,serif;font-weight:700;font-size:19px;color:#0a1140;min-width:52px;font-variant-numeric:tabular-nums">0:00</span>'+
     '<span class="gh-tx" style="flex:1;font-size:11px;line-height:1.25;color:#0a1140;font-weight:600">Your stock is held while the timer runs.</span>'+
     '<button class="gh-ext" style="background:#0a1140;border:0;color:#fff;font-weight:700;font-size:12px;padding:8px 12px;border-radius:8px;white-space:nowrap;cursor:pointer">Extend</button>'+
@@ -3855,13 +3855,26 @@ function ensureGlobalHold(){
 function syncGlobalHold(){
   ensureGlobalHold();
   var bar=document.getElementById('globalhold'); var app=el('app');
+  var inner=bar.querySelector('.gh-inner');
+  var cd=bar.querySelector('.gh-cd'), tx=bar.querySelector('.gh-tx'), ext=bar.querySelector('.gh-ext');
   var kind=null, rem=0, canExt=false;
   if(state.tb && state.tb.items && state.tb.items.length){ rem=tbRemainSec(); canExt=tbAnyExt(); kind='travel'; }
   else if(state.cart && state.cart.length){ rem=remainSec(); canExt=state.cart.some(function(l){return !l.extended;}); kind='local'; }
-  var ownBar=(state.screen==='cart'||state.screen==='tb-shop'||state.screen==='tb-box');
-  if(!kind || rem<=0 || ownBar){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
-  bar.querySelector('.gh-cd').textContent=mmss(rem);
-  var ext=bar.querySelector('.gh-ext'); ext.style.display=canExt?'':'none';
+  var onCartLike=(state.screen==='cart'||state.screen==='tb-shop'||state.screen==='tb-box');
+  if(!kind){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
+  if(rem<=0){
+    if(!onCartLike){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
+    inner.style.background='#5a1d1a'; inner.style.color='#fff';
+    cd.style.display='none';
+    tx.textContent='Hold expired \u2014 items released. Add again.'; tx.style.color='#fff';
+    ext.style.display='none';
+    bar.style.display='block'; if(app) app.style.paddingTop='42px';
+    return;
+  }
+  inner.style.background='#f5a623'; inner.style.color='#0a1140';
+  cd.style.display=''; cd.textContent=mmss(rem); cd.style.color='#0a1140';
+  tx.textContent='Your stock is held while the timer runs.'; tx.style.color='#0a1140';
+  ext.style.display=canExt?'':'none';
   ext.onclick=(kind==='travel')?function(){ extendTravel(); }:function(){ extendCart(); };
   bar.style.display='block'; if(app) app.style.paddingTop='42px';
 }
@@ -4218,6 +4231,7 @@ async function runUnifiedCheckout(order){
   setTimeout(__reveal, 6000);
   var token=await __showP;
   clearInterval(__seek);
+  try{ var __ucbNow=el('ob-uc-buttons'); if(__ucbNow) __ucbNow.innerHTML=''; }catch(e){}
   // Payment method chosen + completed -> now we're finalising. Bring back a clear state.
   var __plt2=el('pay-loader');
   if(__plt2){ __plt2.style.display='flex'; var __t2=__plt2.querySelector('.t'); if(__t2) __t2.textContent='Confirming payment\u2026'; var __s2=__plt2.querySelector('.s'); if(__s2) __s2.textContent='Please wait \u2014 don\u2019t close this page.'; }
@@ -4639,7 +4653,7 @@ function extendTravel(){
     .then(function(res){ var add=((res&&res.added)||180)*1000; state.tb.items.forEach(function(l){ if(!l.extended){ l.exp=(l.exp||Date.now())+add; l.extended=true; } }); toast('Extended by '+Math.round(((res&&res.added)||180)/60)+' min'); if(state.screen==='tb-shop') renderTbShop(); else if(state.screen==='tb-box') renderTbBox(); })
     .catch(function(){ toast('Could not extend.'); }).finally(function(){ btnDone(_b); });
 }
-function tbHoldBar(){ if(!state.tb||!state.tb.items.length) return ''; var rs=tbRemainSec(); return '<div class="hold-bar'+(rs<=0?' expired':'')+'" style="margin:12px 18px 0"><span class="ht cd">'+mmss(rs)+'</span><span class="hx">'+(rs>0?'Your Travel Box is held and hidden from public availability while it ticks.':'Hold expired \u2014 items released. Add fish again.')+'</span>'+((rs>0&&tbAnyExt())?'<button onclick="extendTravel()">Extend</button>':'')+'</div>'; }
+function tbHoldBar(){ return ''; /* unified: pinned #globalhold shows on all screens */ if(!state.tb||!state.tb.items.length) return ''; var rs=tbRemainSec(); return '<div class="hold-bar'+(rs<=0?' expired':'')+'" style="margin:12px 18px 0"><span class="ht cd">'+mmss(rs)+'</span><span class="hx">'+(rs>0?'Your Travel Box is held and hidden from public availability while it ticks.':'Hold expired \u2014 items released. Add fish again.')+'</span>'+((rs>0&&tbAnyExt())?'<button onclick="extendTravel()">Extend</button>':'')+'</div>'; }
 function tbBoxPreview(w){ var b,l; if(w<=5){b=1;l='1 Small Box';} else if(w<=10){b=1;l='1 Medium Box';} else if(w<=15){b=1;l='1 Large Box';} else {b=2;l='1 Large Box + 1 Medium Box';} return {boxes:b,label:l}; }
 function tbServiceCharge(){ return tbBoxPreview(tbWeight()).boxes * (CFG.servicePerBox!=null?CFG.servicePerBox:80); }
 function tbCertCharge(){ return CFG.certCharge!=null?CFG.certCharge:50; }
