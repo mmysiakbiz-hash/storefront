@@ -4137,12 +4137,15 @@ async function runUnifiedCheckout(order){
   if(typeof Accept==='undefined'){ throw new Error('payment library did not initialise'); }
   var accept=await Accept(cc);
   var up=await accept.unifiedPayments();
-  // Cybersource opens its own full-screen Secure Checkout overlay; our screen stays
-  // underneath. Keep the spinner + a truthful message up the whole time, so the
-  // customer never sees an empty "card details" screen while the overlay loads/runs.
-  var __plt=el('pay-loader'); if(__plt){ var __t=__plt.querySelector('.t'); if(__t) __t.textContent='Opening secure checkout\u2026'; var __sub=__plt.querySelector('.s'); if(__sub) __sub.textContent='A secure payment window will appear.'; }
-  if(msg) msg.textContent='';
-  var token=await up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
+  // Invoke show(): this renders the payment-method buttons synchronously. Its promise
+  // only resolves AFTER the customer picks a method and completes payment. So we START
+  // the show() call, then hide the spinner so the buttons are clearly clickable (the
+  // spinner over the buttons wrongly implied "still loading, wait"). Prompt the choice.
+  var __showP=up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
+  var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
+  if(msg){ msg.textContent='Choose how to pay below.'; }
+  var token=await __showP;
+  // Payment method chosen + completed -> now we're finalising. Bring back a clear state.
   var __plt2=el('pay-loader');
   if(__plt2){ __plt2.style.display='flex'; var __t2=__plt2.querySelector('.t'); if(__t2) __t2.textContent='Confirming payment\u2026'; var __s2=__plt2.querySelector('.s'); if(__s2) __s2.textContent='Please wait \u2014 don\u2019t close this page.'; }
   if(msg) msg.textContent='';
