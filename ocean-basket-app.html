@@ -589,6 +589,10 @@ button.is-loading{pointer-events:none}
 .receipt .rnote{font-size:11px;color:var(--mut);margin-top:8px}
 .rqr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;width:-moz-max-content;width:max-content;margin:0 auto 12px}
 .rqr svg{width:150px;height:150px;display:block}
+.pay-loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center}
+.pay-loader .ring{width:44px;height:44px;border:4px solid rgba(10,17,64,.15);border-top-color:var(--ink,#0A1140);border-radius:50%;animation:btnspin .8s linear infinite;margin-bottom:16px}
+.pay-loader .t{font-weight:700;color:var(--ink,#0A1140);font-size:15px;margin-bottom:4px}
+.pay-loader .s{font-size:13px;color:#8a8577}
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -4105,12 +4109,14 @@ function startCardPayment(order){
   go('pay');
   var host=el('pay-host');
   host.innerHTML='<div class="pad"><h2 style="margin:0 0 4px">Pay SCR '+Number(order.total).toFixed(2)+'</h2>'+
-    '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px">Loading secure payment\u2026</div>'+
+    '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px"></div>'+
+    '<div id="pay-loader" class="pay-loader"><div class="ring"></div><div class="t">Loading secure payment\u2026</div><div class="s">This takes a few seconds \u2014 please don\u2019t close the page.</div></div>'+
     '<div id="ob-uc-buttons"></div>'+
     '<div id="pay-retry" style="display:none;margin-top:14px;text-align:center"><div class="check fail" style="margin:0 auto 14px"><svg class="cross" viewBox="0 0 52 52"><path d="M17 17l18 18M35 17l-18 18"/></svg></div><div style="font-weight:700;color:var(--ink);margin-bottom:10px">Payment could not be completed</div><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a id="ob-cancel-link" href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
   window.__payOrder=order;
   runUnifiedCheckout(order).catch(function(e){
     var m=el('pay-msg'); if(m){ m.textContent='Payment could not start: '+((e&&e.message)||e); }
+    var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
     var rr=el('pay-retry'); if(rr) rr.style.display='block';
   });
 }
@@ -4128,6 +4134,7 @@ async function runUnifiedCheckout(order){
   if(msg) msg.textContent='Enter your card details below.';
   var accept=await Accept(cc);
   var up=await accept.unifiedPayments();
+  var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
   var token=await up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
   if(msg) msg.textContent='Confirming payment\u2026';
   var cr=await fetch(API_BASE+'/confirm-payment',{ method:'POST', headers:{'Content-Type':'application/json'},
