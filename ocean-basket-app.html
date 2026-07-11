@@ -3965,10 +3965,19 @@ function renderPayment(){
   }).join('');
 
   el('payment-host').innerHTML='<div class="pad">'+
-    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'<div style="background:#eef4fb;border:1px solid #d5e3f2;border-radius:9px;padding:10px 12px;margin:-2px 0 14px;font-size:13px;color:#0a1140">Have an account? <a onclick="go(\'account\')" style="color:#1ba8d3;font-weight:700;cursor:pointer">Sign in</a> for faster checkout, or <a onclick="go(\'account\')" style="color:#1ba8d3;font-weight:700;cursor:pointer">create one</a> to save your details.</div>')+
+    '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'<div style="background:#eef4fb;border:1px solid #d5e3f2;border-radius:9px;padding:10px 12px;margin:-2px 0 12px;font-size:13px;color:#0a1140">Already have an account? <a onclick="go(\'account\')" style="color:#1ba8d3;font-weight:700;cursor:pointer">Sign in</a> for faster checkout.</div>')+
     '<div class="field"><label>Full name</label><input id="f-name" oninput="state.customer.name=this.value" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
     '<div class="field"><label>WhatsApp / mobile number</label><input id="f-phone" oninput="state.customer.phone=this.value" placeholder="+248 …" value="'+(c.phone||'')+'"></div>'+
-    '<div class="field"><label>Email (optional)</label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+ '<div style="font-size:12px;color:#857f74;margin:-6px 0 12px">We send order updates to your WhatsApp number \u2014 add an email if you prefer that instead.</div>'+
+    '<div class="field"><label>Email <span style="color:#a8341a">*</span></label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+ '<div style="font-size:12px;color:#857f74;margin:-6px 0 12px">Required \u2014 we send your payment receipt and order confirmation here. Order updates also go to your WhatsApp number.</div>'+
+    ((window.OB_USER&&window.OB_USER.email)?'':'<div style="background:#f3f7ee;border:1px solid #cfe0c2;border-radius:11px;padding:13px 14px;margin:0 0 14px">'+
+      '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">'+
+        '<input type="checkbox" id="f-makeacct" oninput="obToggleAcct()" onchange="obToggleAcct()" style="width:20px;height:20px;margin-top:1px;flex:none;accent-color:#0a1140;cursor:pointer">'+
+        '<span><span style="font-weight:800;color:#0a1140">Create a free account</span> \u2014 track orders on any device &amp; check out faster next time. No confirmation email needed.</span>'+
+      '</label>'+
+      '<div id="f-acct-pass-wrap" style="display:none;margin-top:10px">'+
+        '<input id="f-acct-pass" type="password" placeholder="Choose a password (min 6)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cfe0c2;border-radius:8px;font:15px inherit">'+
+      '</div>'+
+    '</div>')+
     addressFields+
     '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
     '<p style="font-size:12px;color:#8a8577;margin:8px 2px 0">Google Pay and Apple Pay may also appear at the payment step, on supported devices.</p>'+
@@ -3988,7 +3997,33 @@ function setPay(m){
   var host=el('payment-host'); if(!host){ renderPayment(); return; }
   [].forEach.call(host.querySelectorAll('.opt[data-pay]'), function(btn){ btn.classList.toggle('on', btn.getAttribute('data-pay')===m); });
 }
-function placeOrder(){
+function obToggleAcct(){ var cb=el('f-makeacct'); var w=el('f-acct-pass-wrap'); if(w) w.style.display=(cb&&cb.checked)?'block':'none'; if(cb&&cb.checked){ var p=el('f-acct-pass'); if(p) setTimeout(function(){ try{p.focus();}catch(e){} },50); } }
+async function obMaybeCreateAccount(){
+  // If the guest ticked "Create a free account", create it now (email_confirm:true =>
+  // NO confirmation email) and sign in silently, so the purchase continues seamlessly.
+  var cb=el('f-makeacct'); if(!cb || !cb.checked) return {done:false};
+  if(window.OB_USER && window.OB_USER.email) return {done:false}; // already signed in
+  var email=(state.customer.email||'').trim().toLowerCase();
+  var pass=((el('f-acct-pass')||{}).value)||'';
+  if(!email){ toast('Add your email to create an account'); if(el('f-email')) el('f-email').focus(); return {error:true}; }
+  if(pass.length<6){ toast('Account password must be at least 6 characters'); if(el('f-acct-pass')) el('f-acct-pass').focus(); return {error:true}; }
+  try{
+    var resp=await fetch(API_BASE+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pass,name:(state.customer.name||''),phone:(state.customer.phone||'')})});
+    var out={}; try{ out=await resp.json(); }catch(e){}
+    // Sign in (works whether we just created it, or it already existed with this pass).
+    if(window.sbc && window.sbc.auth){
+      var r=await window.sbc.auth.signInWithPassword({email:email,password:pass});
+      if(r.error){
+        if(out && out.exists){ toast('That email already has an account \u2014 tap \u201cSign in\u201d, or untick to continue as guest.'); }
+        else { toast('Could not create account \u2014 continuing as guest.'); }
+        return {error:true};
+      }
+      window.OB_USER={email:email,name:(state.customer.name||''),phone:(state.customer.phone||'')};
+    }
+    return {done:true};
+  }catch(e){ toast('Account step failed \u2014 continuing as guest.'); return {error:true}; }
+}
+async function placeOrder(){
   var name=el('f-name').value.trim();
   var phone=el('f-phone').value.trim();
   if(!name||!phone){ toast('Please add your name and phone'); return; }
@@ -3999,6 +4034,11 @@ function placeOrder(){
   if(state.fulfil==='delivery' && !state.customer.address){ toast('Please add a delivery address'); return; }
   var pt=POINTS.filter(function(p){return p.n===state.point;})[0];
   if(state.fulfil==='pickup' && !pt){ toast('Please choose a collection point'); go('map'); return; }
+
+  // Optional: create the account inline if the guest ticked the box. On error we stop
+  // so they can fix it or untick; on success/skip we continue the purchase seamlessly.
+  var __acct=await obMaybeCreateAccount();
+  if(__acct && __acct.error){ return; }
 
   var sub=cartSubtotal();
   var deliveryFee = state.fulfil==='delivery' ? (sub>=CFG.freeFrom?0:CFG.deliveryFee) : 0;
@@ -4969,7 +5009,12 @@ window.addEventListener('load', function(){ try{ if(location.pathname.indexOf('o
         '<button id="succ-create" style="flex:1;background:#0a1140;color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer">Create account</button>'+
         '<button id="succ-skip" style="background:#fff;border:1px solid #e4ddcf;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer">No thanks</button>'+
       '</div></div>';
-    host.appendChild(wrap);
+    // Insert near the top (after the success card) so it's visible without scrolling,
+    // instead of being buried at the bottom of the receipt.
+    var __firstCard=host.querySelector('.success');
+    if(__firstCard && __firstCard.nextSibling){ host.insertBefore(wrap, __firstCard.nextSibling); }
+    else if(__firstCard){ host.appendChild(wrap); }
+    else { host.insertBefore(wrap, host.firstChild); }
     document.getElementById('succ-skip').onclick=function(){ var w=document.getElementById('succ-acct'); if(w) w.remove(); };
     document.getElementById('succ-create').onclick=async function(){
       var pass=((document.getElementById('succ-pass')||{}).value)||''; var m=document.getElementById('succ-msg');
