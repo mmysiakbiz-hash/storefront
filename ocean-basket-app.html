@@ -4141,9 +4141,25 @@ async function runUnifiedCheckout(order){
   // only resolves AFTER the customer picks a method and completes payment. So we START
   // the show() call, then hide the spinner so the buttons are clearly clickable (the
   // spinner over the buttons wrongly implied "still loading, wait"). Prompt the choice.
+  // Hide the spinner EXACTLY when the payment buttons actually appear in the container
+  // (not before -> empty gap, not after -> spinner over ready buttons). Watch the
+  // container for injected children; fall back to a timer in case the observer misses.
+  var __box=el('ob-uc-buttons');
+  var __revealed=false;
+  function __reveal(){
+    if(__revealed) return; __revealed=true;
+    var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
+    if(msg){ msg.textContent='Choose how to pay below.'; }
+  }
+  if(__box && typeof MutationObserver!=='undefined'){
+    var __mo=new MutationObserver(function(){
+      if(__box && __box.children && __box.children.length>0){ __reveal(); if(__mo) __mo.disconnect(); }
+    });
+    __mo.observe(__box, { childList:true, subtree:true });
+  }
   var __showP=up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
-  var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
-  if(msg){ msg.textContent='Choose how to pay below.'; }
+  // Safety fallback: reveal after 4s even if the observer never fires.
+  setTimeout(__reveal, 4000);
   var token=await __showP;
   // Payment method chosen + completed -> now we're finalising. Bring back a clear state.
   var __plt2=el('pay-loader');
@@ -4799,10 +4815,13 @@ window.addEventListener('load', function(){ try{ if(location.pathname.indexOf('o
     if(!q) return;
     q=q.trim().toUpperCase();
     if(typeof go==='function') go('orders');
+    var __oh=el('orders-host');
+    if(__oh){ __oh.innerHTML='<div class="sectit">Your orders</div><div class="pay-loader"><div class="ring"></div><div class="t">Opening your order\u2026</div><div class="s">'+q+'</div></div>'; }
     if(typeof fetchStatus==='function'){
       fetchStatus(q).then(function(r){
-        if(r && !r.__missing){ if(typeof saveOrderNo==='function') saveOrderNo(q); if(typeof renderOrders==='function') renderOrders(); }
-      }).catch(function(){});
+        if(r && !r.__missing){ if(typeof saveOrderNo==='function') saveOrderNo(q); }
+        if(typeof renderOrders==='function') renderOrders();
+      }).catch(function(){ if(typeof renderOrders==='function') renderOrders(); });
     }
   }catch(e){}
 });
