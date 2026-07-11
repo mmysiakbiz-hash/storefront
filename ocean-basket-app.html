@@ -46,6 +46,7 @@ img{display:block; max-width:100%}
 .screen{display:none; position:absolute; inset:0; bottom:var(--nav-h);
   flex-direction:column; overflow-y:auto; -webkit-overflow-scrolling:touch}
 .screen.active{display:flex; animation:fade .25s ease}
+body.hold-on .screen.active{top:var(--hold-h,44px)}
 #product-host,#payment-host,#delivery-host,#map-host,#cart-host,#success-host,#orders-host{display:flex; flex-direction:column; flex:1}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -3846,7 +3847,7 @@ function ensureGlobalHold(){
   var d=document.createElement('div'); d.id='globalhold';
   d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:300;display:none';
   d.innerHTML='<div class="gh-inner" style="max-width:520px;margin:0 auto;background:#f5a623;color:#0a1140;display:flex;align-items:center;gap:10px;padding:10px 14px;box-shadow:0 2px 14px rgba(0,0,0,.35)">'+
-    '<span class="gh-cd" style="font-family:\'Bodoni Moda\',Didot,Georgia,serif;font-weight:700;font-size:19px;color:#0a1140;min-width:52px;font-variant-numeric:tabular-nums">0:00</span>'+
+    '<span class="gh-cd" style="font-family:Outfit,-apple-system,BlinkMacSystemFont,sans-serif;font-weight:800;font-size:21px;letter-spacing:.4px;color:#0a1140;min-width:56px;font-variant-numeric:tabular-nums">0:00</span>'+
     '<span class="gh-tx" style="flex:1;font-size:11px;line-height:1.25;color:#0a1140;font-weight:600">Your stock is held while the timer runs.</span>'+
     '<button class="gh-ext" style="background:#0a1140;border:0;color:#fff;font-weight:700;font-size:12px;padding:8px 12px;border-radius:8px;white-space:nowrap;cursor:pointer">Extend</button>'+
   '</div>';
@@ -3861,14 +3862,14 @@ function syncGlobalHold(){
   if(state.tb && state.tb.items && state.tb.items.length){ rem=tbRemainSec(); canExt=tbAnyExt(); kind='travel'; }
   else if(state.cart && state.cart.length){ rem=remainSec(); canExt=state.cart.some(function(l){return !l.extended;}); kind='local'; }
   var onCartLike=(state.screen==='cart'||state.screen==='tb-shop'||state.screen==='tb-box');
-  if(!kind){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
+  if(!kind){ bar.style.display='none'; if(app) app.style.paddingTop=''; document.body.classList.remove('hold-on'); return; }
   if(rem<=0){
-    if(!onCartLike){ bar.style.display='none'; if(app) app.style.paddingTop=''; return; }
+    if(!onCartLike){ bar.style.display='none'; if(app) app.style.paddingTop=''; document.body.classList.remove('hold-on'); return; }
     inner.style.background='#5a1d1a'; inner.style.color='#fff';
     cd.style.display='none';
     tx.textContent='Hold expired \u2014 items released. Add again.'; tx.style.color='#fff';
     ext.style.display='none';
-    bar.style.display='block'; if(app) app.style.paddingTop='42px';
+    bar.style.display='block'; if(app) app.style.paddingTop=''; try{ var __hh=bar.offsetHeight||44; document.documentElement.style.setProperty('--hold-h', __hh+'px'); }catch(e){} document.body.classList.add('hold-on');
     return;
   }
   inner.style.background='#f5a623'; inner.style.color='#0a1140';
@@ -3876,7 +3877,7 @@ function syncGlobalHold(){
   tx.textContent='Your stock is held while the timer runs.'; tx.style.color='#0a1140';
   ext.style.display=canExt?'':'none';
   ext.onclick=(kind==='travel')?function(){ extendTravel(); }:function(){ extendCart(); };
-  bar.style.display='block'; if(app) app.style.paddingTop='42px';
+  bar.style.display='block'; if(app) app.style.paddingTop=''; try{ var __hh=bar.offsetHeight||44; document.documentElement.style.setProperty('--hold-h', __hh+'px'); }catch(e){} document.body.classList.add('hold-on');
 }
 startCartTimer();
 setInterval(syncGlobalHold, 1000);
