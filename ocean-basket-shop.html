@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="./ob-icon-192.png">
 <title>Ocean Basket — Shop</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   :root{ --navy:#0a1140; --gilt:#1ba8d3; --paper:#faf7f0; --line:#e4ddcf; --ink:#0a1140; --mut:#857f74; --char:#23262b; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -144,7 +145,6 @@ var ORDERS=[];
 var scanStream=null;
 function stopScan(){ try{ if(scanStream){ scanStream.getTracks().forEach(function(t){t.stop();}); } }catch(e){} scanStream=null; var b=document.getElementById('shscan'); if(b) b.remove(); }
 function scanOnce(labelText){ return new Promise(async function(resolve){
-  if(!('BarcodeDetector' in window)){ resolve({noDetector:true}); return; }
   var box=document.createElement('div'); box.id='shscan';
   box.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
   box.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;color:#fff;font:600 14px Outfit,sans-serif;background:rgba(0,0,0,.6)"><span>'+labelText+'</span><button id="shscanX" style="margin-left:auto;background:rgba(255,255,255,.16);border:0;color:#fff;font:600 14px Outfit,sans-serif;padding:9px 14px;border-radius:8px">Cancel</button></div><video id="shscanVid" playsinline style="flex:1;width:100%;object-fit:cover"></video><div class="shscan-frame"></div>';
@@ -153,8 +153,10 @@ function scanOnce(labelText){ return new Promise(async function(resolve){
   document.getElementById('shscanX').onclick=function(){ stopScan(); resolve(null); };
   try{ scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }catch(e){ stopScan(); resolve({error:1}); return; }
   vid.srcObject=scanStream; await vid.play();
-  var det=new window.BarcodeDetector({formats:['qr_code']});
-  (function tick(){ if(!document.getElementById('shscan')) return; if(!paused && vid.readyState===vid.HAVE_ENOUGH_DATA){ det.detect(vid).then(function(cs){ if(!paused && cs && cs.length){ paused=true; stopScan(); resolve({text:cs[0].rawValue}); } }).catch(function(){}); } requestAnimationFrame(tick); })();
+  var det=('BarcodeDetector' in window)?new window.BarcodeDetector({formats:['qr_code']}):null;
+  if(!det && !window.jsQR){ stopScan(); resolve({noDetector:true}); return; }
+  var cv=document.createElement('canvas'), cx=cv.getContext('2d',{willReadFrequently:true});
+  (function tick(){ if(!document.getElementById('shscan')) return; if(!paused && vid.readyState===vid.HAVE_ENOUGH_DATA){ cv.width=vid.videoWidth; cv.height=vid.videoHeight; cx.drawImage(vid,0,0,cv.width,cv.height); if(det){ det.detect(vid).then(function(cs){ if(!paused && cs && cs.length){ paused=true; stopScan(); resolve({text:cs[0].rawValue}); } }).catch(function(){}); } else { var im=cx.getImageData(0,0,cv.width,cv.height); var r=window.jsQR && jsQR(im.data,cv.width,cv.height); if(r && r.data){ paused=true; stopScan(); resolve({text:r.data}); } } } requestAnimationFrame(tick); })();
 }); }
 function extractOrder(raw){ if(!raw) return ''; var m=String(raw).match(/OCB-[A-Z]-[0-9]{6}-[0-9]+/i); return (m?m[0]:String(raw).trim()).toUpperCase(); }
 async function startHandover(){ var r=await scanOnce('Scan the customer QR'); if(!r) return; if(r.noDetector){ return manualHandover('This device cannot scan a QR. Type the order number instead.'); } if(r.error){ return manualHandover('Camera unavailable. Type the order number instead.'); } resolveOrder(extractOrder(r.text)); }
