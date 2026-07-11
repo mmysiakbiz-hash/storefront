@@ -481,6 +481,8 @@ button.is-loading{pointer-events:none}
 .track-card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:18px;margin-bottom:14px}
 .track-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .track-no{font-family:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;font-weight:600;font-size:18px;color:var(--ink)}
+.track-items{font-weight:800;font-size:15.5px;color:var(--ink);line-height:1.35}
+.track-ono{font-size:12.5px;color:var(--mut);margin-top:4px;font-weight:600;letter-spacing:.02em}
 .track-meta{font-size:12.5px;color:var(--mut);margin-top:2px}
 .track-stat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gilt);background:var(--paper2);padding:6px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0}
 
@@ -4300,6 +4302,14 @@ async function renderOrders(){
   var seen={}, all=[];
   acct.concat(dev).forEach(function(o){ if(o && o.order_no && !seen[o.order_no]){ seen[o.order_no]=1; all.push(o); } });
   all.sort(function(a,b){ return new Date(b.created_at||0)-new Date(a.created_at||0); });
+  // Account orders (ob_my_orders) come back without line items — enrich them so every
+  // card can show WHAT was ordered, not just the number.
+  try{
+    await Promise.all(all.map(function(o){
+      if(o.items && o.items.length) return null;
+      return fetchStatus(o.order_no).then(function(r){ if(r && r.items && r.items.length) o.items=r.items; }).catch(function(){});
+    }));
+  }catch(e){}
   var oh=el('orders-live'); if(oh){ oh.innerHTML = all.length ? all.map(orderCardLive).join('') : emptyOrdersHTML(); }
 }
 function orderWhereLive(o){
@@ -4307,6 +4317,22 @@ function orderWhereLive(o){
   if(o.fulfilment==='door'){ return 'Delivery'+(o.door_code?(' \u00b7 '+o.door_code):''); }
   var pt=POINTS.filter(function(p){return p.id===o.drop_point_id;})[0];
   return 'Collect'+(pt?(' \u00b7 '+pt.id+' '+pt.name):'');
+}
+function obEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]; }); }
+function fmtOrderItem(it){
+  var name=it.product_name||it.product_id||'Item';
+  var seg=name;
+  if(it.cut){ seg+=' \u00b7 '+it.cut.charAt(0).toUpperCase()+it.cut.slice(1); }
+  if(it.state){ seg+=' ('+it.state+')'; }
+  if(it.weight_kg){ seg+=' \u00b7 '+Number(it.weight_kg).toFixed(2)+' kg'; }
+  if(it.packs && Number(it.packs)>1){ seg+=' \u00d7'+it.packs; }
+  return seg;
+}
+function orderItemsSummary(o){
+  if(!o.items || !o.items.length) return '';
+  var lines=o.items.slice(0,3).map(function(it){ return obEsc(fmtOrderItem(it)); });
+  if(o.items.length>3){ lines.push('+'+(o.items.length-3)+' more'); }
+  return '<div class="track-items">'+lines.join('<br>')+'</div>';
 }
 function orderCardLive(o){
   var idx=statusIndex(o.status);
@@ -4319,8 +4345,11 @@ function orderCardLive(o){
   var payCTA=(o.status==='pending_payment') ? '<div style="margin-top:16px;padding:14px;border:1px solid #a8341a;background:#fbeae5;border-radius:12px;text-align:center"><div style="font-weight:800;color:#a8341a;margin-bottom:8px">Payment not completed</div><button class="btn" onclick="payPending(\''+o.order_no+'\','+Number(o.total||0)+')">Complete payment</button></div>' : '';
   var readyCTA=(o.status==='ready' && isColl) ? '<div style="margin-top:16px;padding:16px;border:1px solid #3f7a5a;background:#edf3ee;border-radius:12px;text-align:center">'+'<div style="font-weight:800;color:#2f5e46;margin-bottom:4px">Ready for collection</div>'+'<div style="font-size:13px;color:#4a6b58;margin-bottom:13px">Your order is in freezer '+o.drop_point_id+' at the collection point. Scan at the freezer to confirm pickup.</div>'+'<a href="ocean-basket-collect.html?order='+encodeURIComponent(o.order_no)+'" style="display:inline-block;background:#0a1140;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:700">Scan to collect</a>'+'</div>' : '';
   var qrCTA=(isColl && !cancelled && o.status!=='pending_payment' && o.status!=='completed' && o.status!=='collected') ? '<button class="btn ghost" style="margin-top:12px;width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>' : '';
+  var __items=orderItemsSummary(o);
   return '<div class="track-card">'+
-    '<div class="track-head"><div><div class="track-no">'+o.order_no+'</div>'+
+    '<div class="track-head"><div style="min-width:0">'+
+      (__items || '<div class="track-no">'+o.order_no+'</div>')+
+      (__items ? '<div class="track-ono">Order '+o.order_no+'</div>' : '')+
       '<div class="track-meta">'+money2(o.total)+' \u00b7 '+orderWhereLive(o)+'</div></div>'+
       '<div class="track-stat">'+statLabel+'</div></div>'+
       (cancelled ? '<div class="info-banner" style="background:#fbeae5;border-color:#f0c4b8;color:#a8341a;margin-top:12px">This order was '+o.status+'.</div>'
