@@ -41,6 +41,8 @@
   .msg.err{ background:#fbeae5; border:1px solid #a8341a; color:#a8341a; }
   .empty{ text-align:center; color:var(--mut); font-size:14px; padding:26px 10px; }
   .note{ font-size:12px; color:var(--mut); background:#f6f3ec; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:14px; line-height:1.5; }
+.shscan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:66vw;max-width:280px;height:66vw;max-height:280px;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+  .verdict{border-radius:14px;padding:22px 18px;text-align:center;border:1px solid;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -89,12 +91,12 @@ async function render(){
   var {data,error}=await sb.rpc('ob_point_orders',{p_store:STORE});
   if(error){ view.innerHTML='<div class="msg err">'+esc(error.message)+'</div>'
     +'<div class="row-actions" style="margin-top:12px"><button class="btn sec" onclick="render()">Retry</button><button class="btn sec" onclick="logout()">Log out</button></div>'; return; }
-  var list=data||[];
+  var list=data||[]; ORDERS=list;
   var ready=list.filter(function(o){return o.status==='ready';});
   var otw=list.filter(function(o){return o.status==='out_for_delivery';});
   var done=list.filter(function(o){return o.status==='collected';});
 
-  var html='<div class="row-actions"><button class="btn sec" onclick="render()">Refresh</button><button class="btn sec" onclick="logout()">Log out</button></div>';
+  var html='<button class="btn" onclick="startHandover()" style="margin-bottom:10px">Scan customer QR to hand over</button>'+'<div class="row-actions"><button class="btn sec" onclick="render()">Refresh</button><button class="btn sec" onclick="manualHandover()">Enter number</button><button class="btn sec" onclick="logout()">Log out</button></div>';
 
   html+='<div class="sec-h">To hand over ('+ready.length+')</div>';
   html+= ready.length ? ready.map(orderCard).join('') : '<div class="empty">No packages waiting.</div>';
@@ -104,7 +106,7 @@ async function render(){
   html+='<div class="sec-h">Handed over today ('+done.length+')</div>';
   html+= done.length ? done.map(orderCard).join('') : '<div class="empty">Nothing handed over yet.</div>';
 
-  html+='<div class="note">This is the shop view: packages placed in this point\u2019s freezer, with their status. Handover scanning is added next.</div>';
+  html+='<div class="note">This is the shop view: packages placed in this point\u2019s freezer, with their status. Scan a customer QR above to confirm a handover.</div>';
   view.innerHTML=html;
 }
 
@@ -137,6 +139,62 @@ async function boot(){
   render();
 }
 function logout(){ sb.auth.signOut().then(function(){ loginView(); }); }
+
+var ORDERS=[];
+var scanStream=null;
+function stopScan(){ try{ if(scanStream){ scanStream.getTracks().forEach(function(t){t.stop();}); } }catch(e){} scanStream=null; var b=document.getElementById('shscan'); if(b) b.remove(); }
+function scanOnce(labelText){ return new Promise(async function(resolve){
+  if(!('BarcodeDetector' in window)){ resolve({noDetector:true}); return; }
+  var box=document.createElement('div'); box.id='shscan';
+  box.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
+  box.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;color:#fff;font:600 14px Outfit,sans-serif;background:rgba(0,0,0,.6)"><span>'+labelText+'</span><button id="shscanX" style="margin-left:auto;background:rgba(255,255,255,.16);border:0;color:#fff;font:600 14px Outfit,sans-serif;padding:9px 14px;border-radius:8px">Cancel</button></div><video id="shscanVid" playsinline style="flex:1;width:100%;object-fit:cover"></video><div class="shscan-frame"></div>';
+  document.body.appendChild(box);
+  var vid=document.getElementById('shscanVid'); var paused=false;
+  document.getElementById('shscanX').onclick=function(){ stopScan(); resolve(null); };
+  try{ scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }catch(e){ stopScan(); resolve({error:1}); return; }
+  vid.srcObject=scanStream; await vid.play();
+  var det=new window.BarcodeDetector({formats:['qr_code']});
+  (function tick(){ if(!document.getElementById('shscan')) return; if(!paused && vid.readyState===vid.HAVE_ENOUGH_DATA){ det.detect(vid).then(function(cs){ if(!paused && cs && cs.length){ paused=true; stopScan(); resolve({text:cs[0].rawValue}); } }).catch(function(){}); } requestAnimationFrame(tick); })();
+}); }
+function extractOrder(raw){ if(!raw) return ''; var m=String(raw).match(/OCB-[A-Z]-[0-9]{6}-[0-9]+/i); return (m?m[0]:String(raw).trim()).toUpperCase(); }
+async function startHandover(){ var r=await scanOnce('Scan the customer QR'); if(!r) return; if(r.noDetector){ return manualHandover('This device cannot scan a QR. Type the order number instead.'); } if(r.error){ return manualHandover('Camera unavailable. Type the order number instead.'); } resolveOrder(extractOrder(r.text)); }
+function manualHandover(note){ var no=window.prompt((note?note+'\n\n':'')+'Order number (OCB-...)'); if(no){ resolveOrder(extractOrder(no)); } }
+function resolveOrder(no){
+  var o=null; for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].order_id).toUpperCase()===no){ o=ORDERS[i]; break; } }
+  if(!o){ return verdict(false,no,'Not found at this point. Check the number, or the package may not have arrived in the freezer yet.'); }
+  if(o.status==='collected'){ return verdict(true,no,'Already handed over'+(o.collected_at?(' \u00b7 '+fmtTime(o.collected_at)):'')+'.',true); }
+  if(o.status!=='ready'){ return verdict(false,no,'Not ready to hand over yet (status: '+esc(o.status)+').'); }
+  confirmCard(o);
+}
+function confirmCard(o){
+  view.innerHTML='<div class="card"><div class="sec-h" style="margin-top:0">Confirm handover</div>'
+   +'<div class="on">'+esc(o.order_id)+'</div>'
+   +'<div class="cn">'+esc(o.customer_name||'')+(o.phone?(' \u00b7 '+esc(o.phone)):'')+'</div>'
+   +(o.items?'<div class="it">'+esc(o.items)+'</div>':'')
+   +'<div class="meta"><span class="pill ready">To hand over</span>'+(o.drop_point_id?'<span class="pt">'+esc(o.drop_point_id)+'</span>':'')+'</div>'
+   +'<button class="btn" id="doCollect" style="margin-top:16px">Confirm handover</button>'
+   +'<button class="btn sec" onclick="render()" style="margin-top:8px">Cancel</button><div id="m"></div></div>';
+  document.getElementById('doCollect').onclick=function(){ doCollect(o); };
+}
+async function doCollect(o){
+  var b=document.getElementById('doCollect'), m=document.getElementById('m');
+  b.disabled=true; b.textContent='Confirming\u2026';
+  var res=await sb.rpc('ob_collect',{p_store:STORE,p_order:o.order_id,p_drop_point:o.drop_point_id});
+  if(res.error){ m.innerHTML='<div class="msg err">'+esc(res.error.message)+'</div>'; b.disabled=false; b.textContent='Confirm handover'; return; }
+  var d=res.data;
+  if(d&&d.ok){ verdict(true,o.order_id,'Handed over. The customer is cleared to leave.'); }
+  else { m.innerHTML='<div class="msg err">'+esc((d&&d.reason)||'Could not confirm')+'</div>'; b.disabled=false; b.textContent='Confirm handover'; }
+}
+function verdict(ok,no,msg,neutral){
+  var color=ok?'#2f5e46':'#a8341a', bg=ok?'#edf3ee':'#fbeae5', bd=ok?'#3f7a5a':'#a8341a';
+  view.innerHTML='<div class="verdict" style="border-color:'+bd+';background:'+bg+'">'
+   +'<div style="font-size:40px;line-height:1;margin-bottom:8px;color:'+color+'">'+(ok?'\u2713':'\u2715')+'</div>'
+   +'<div style="font-family:ui-monospace,monospace;font-weight:700;color:'+color+';margin-bottom:6px">'+esc(no)+'</div>'
+   +'<div style="font-size:14px;color:'+color+'">'+esc(msg)+'</div></div>'
+   +'<button class="btn" onclick="render()">Back to packages</button>'
+   +'<button class="btn sec" onclick="startHandover()" style="margin-top:8px">Scan another</button>';
+}
+
 boot();
 </script>
 </body>
