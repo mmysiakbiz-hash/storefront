@@ -4184,22 +4184,19 @@ async function runUnifiedCheckout(order){
   // Hide the spinner EXACTLY when the payment buttons actually appear in the container
   // (not before -> empty gap, not after -> spinner over ready buttons). Watch the
   // container for injected children; fall back to a timer in case the observer misses.
-  var __box=el('ob-uc-buttons');
   var __revealed=false;
   function __reveal(){
     if(__revealed) return; __revealed=true;
     var __pl=el('pay-loader'); if(__pl) __pl.style.display='none';
     if(msg){ msg.textContent='Choose how to pay below.'; }
   }
-  if(__box && typeof MutationObserver!=='undefined'){
-    var __mo=new MutationObserver(function(){
-      if(__box && __box.children && __box.children.length>0){ __reveal(); if(__mo) __mo.disconnect(); }
-    });
-    __mo.observe(__box, { childList:true, subtree:true });
-  }
+  // DOM/child/height detection is unreliable here: Cybersource renders the buttons inside
+  // a cross-origin iframe that mounts (and reports height) BEFORE the buttons actually
+  // paint, so any "child appeared"/"has height" check hides the spinner too early and
+  // leaves an empty gap. Instead keep the spinner up for a fixed window that comfortably
+  // covers the button paint, then reveal. It never waits for the user to pick a method.
   var __showP=up.show({ containers:{ paymentSelection:'#ob-uc-buttons' } });
-  // Safety fallback: reveal after 4s even if the observer never fires.
-  setTimeout(__reveal, 4000);
+  setTimeout(__reveal, 2200);
   var token=await __showP;
   // Payment method chosen + completed -> now we're finalising. Bring back a clear state.
   var __plt2=el('pay-loader');
