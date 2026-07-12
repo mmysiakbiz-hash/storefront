@@ -163,6 +163,13 @@ a{color:var(--ink)}
 }
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gilt);border-radius:50%;animation:spin .6s linear infinite;vertical-align:-2px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.statpill.statpill-btn{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.statpill.statpill-btn::after{content:"";width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;opacity:.5}
+.ob-statusmenu{position:fixed;z-index:300;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 34px rgba(6,34,46,.22);padding:6px;min-width:210px;max-height:70vh;overflow:auto}
+.ob-statusmenu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;padding:9px 11px;border-radius:7px;font:600 12.5px Outfit,sans-serif;color:var(--char);cursor:pointer;text-transform:uppercase;letter-spacing:.03em}
+.ob-statusmenu button:hover{background:#f4f0e8}
+.ob-statusmenu button.cur{background:#eef4fb;color:#0a1140}
+.ob-statusmenu button .tick{margin-left:auto;color:#2f5e46;font-weight:800}
 </style>
 </head>
 <body>
@@ -191,7 +198,7 @@ a{color:var(--ink)}
 <div class="shell" id="shell">
   <div class="topbar">
     <img src="./ob-icon-192.png" alt="" style="width:30px;height:30px;border-radius:7px;margin-right:11px;vertical-align:middle;flex:none"><h1 style="display:inline-block;vertical-align:middle">Ocean Basket Admin</h1>
-    <span class="ver">build 2026-06-18 · users</span>
+    <span class="ver">build 2026-07-11b · users</span>
     <span class="who" id="who"></span>
     <button class="out" onclick="signOut()">Sign out</button>
   </div>
@@ -204,7 +211,7 @@ a{color:var(--ink)}
     <button data-tab="routes" onclick="tab('routes')">Routes &amp; Points</button>
     <button data-tab="replenish" onclick="tab('replenish')">Replenishment</button>
     <button data-tab="shops" onclick="tab('shops')">4-Shop Stock</button>
-    <button data-tab="users" onclick="tab('users')">Users</button>
+    <button data-tab="users" onclick="tab('users')">Users</button><button data-tab="health" onclick="tab('health');renderHealth()">System status</button>
   </div>
   <div class="wrap">
     <div class="panel on" id="p-dashboard"><div class="loading">Loading…</div></div>
@@ -218,6 +225,7 @@ a{color:var(--ink)}
     <div class="panel" id="p-dispatch"><div style="padding:2px"><h2 style="margin:0 0 3px">Dispatch</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Assign packed orders to a driver for the day. The driver then sees them in “My run”.</p><div id="dispatch-body">Open this tab to load.</div></div></div>
   <div class="panel" id="p-clients"><div style="padding:2px"><h2 style="margin:0 0 3px">Clients</h2><p style="color:#857f74;font-size:13px;margin:0 0 14px">Grouped by email — every order, status, spend, and freezer→collection timing.</p><div style="background:#fff;border:1px solid #e4ddcf;border-radius:10px;padding:14px;margin:0 0 16px"><div style="font-weight:700;color:#0a1140;margin-bottom:4px">Delete customer data (privacy request)</div><div style="color:#857f74;font-size:12.5px;margin-bottom:10px">Anonymises all orders for this customer (removes name, phone, email, address and any passport/cert data) and deletes their account. Order records are kept but made anonymous. This cannot be undone.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="del-cust-email" type="email" placeholder="Customer email" style="flex:1;min-width:200px;padding:10px;border:1px solid #e4ddcf;border-radius:8px;font:14px inherit"><input id="del-cust-phone" type="tel" placeholder="or phone" style="width:140px;padding:10px;border:1px solid #e4ddcf;border-radius:8px;font:14px inherit"><button onclick="deleteCustomerData()" style="background:#b5573a;color:#fff;border:0;border-radius:8px;padding:11px 16px;font-weight:700;cursor:pointer">Delete data</button></div><div id="del-cust-msg" style="font-size:13px;margin-top:8px"></div></div><div id="clients-body">Open this tab to load.</div></div></div>
   <div class="panel" id="p-users"><div class="loading">Loading…</div></div>
+  <div class="panel" id="p-health"><div class="loading">Open this tab to load.</div></div>
   </div>
 </div>
 
@@ -468,11 +476,27 @@ function renderOrders(){
     return '<div class="order-row"><div class="oinfo"><div class="ono">'+o.id+'</div>'+
       '<div class="ometa">'+(o.customer_name||'—')+' · '+money(o.total)+' · '+where+'</div>'+'<div class="ometa" style="opacity:.7">'+fmtWhen(o.created_at)+'</div></div>'+
       '<button class="btn ghost sm" onclick="markPacked(\''+o.id+'\')">Packed</button>'+
-      '<select class="statpill" onchange="setStatus(\''+o.id+'\',this.value)">'+opts+'</select></div>';
+      '<button class="statpill statpill-btn" onclick="openStatusMenu(this,\''+o.id+'\',\''+o.status+'\')">'+o.status+'</button></div>';
   }).join('');
   el('p-orders').innerHTML='<div class="section-head"><h2>Order Monitor</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadOrders({render:true});})">Refresh</button></div>'+
     '<div class="card">'+(rows||'<div class="empty"><h3>No orders yet</h3></div>')+'</div>';
 }
+function openStatusMenu(btn,id,current){
+  closeStatusMenu();
+  var m=document.createElement('div'); m.className='ob-statusmenu'; m.id='ob-statusmenu';
+  m.innerHTML=STATUSES.map(function(st){ return '<button data-st="'+st+'"'+(st===current?' class="cur"':'')+'>'+st+(st===current?'<span class="tick">\u2713</span>':'')+'</button>'; }).join('');
+  document.body.appendChild(m);
+  var r=btn.getBoundingClientRect();
+  var mw=m.offsetWidth, mh=m.offsetHeight;
+  var left=Math.min(r.left, window.innerWidth-mw-8); if(left<8){ left=8; }
+  var top=r.bottom+6; if(top+mh>window.innerHeight-8){ var up=r.top-mh-6; top=(up<8)?8:up; }
+  m.style.left=left+'px'; m.style.top=top+'px';
+  [].forEach.call(m.querySelectorAll('button'), function(b){ b.onclick=function(){ var st=b.getAttribute('data-st'); closeStatusMenu(); if(st!==current){ setStatus(id,st); } }; });
+  setTimeout(function(){ document.addEventListener('click',obStatusOutside,true); document.addEventListener('scroll',closeStatusMenu,true); window.addEventListener('resize',closeStatusMenu); document.addEventListener('keydown',obStatusEsc); },0);
+}
+function obStatusOutside(e){ var m=document.getElementById('ob-statusmenu'); if(m && !m.contains(e.target)){ closeStatusMenu(); } }
+function obStatusEsc(e){ if(e.key==='Escape'){ closeStatusMenu(); } }
+function closeStatusMenu(){ var m=document.getElementById('ob-statusmenu'); if(m){ m.remove(); } document.removeEventListener('click',obStatusOutside,true); document.removeEventListener('scroll',closeStatusMenu,true); window.removeEventListener('resize',closeStatusMenu); document.removeEventListener('keydown',obStatusEsc); }
 function setStatus(id,status){ sb.from('ob_orders').update({status:status}).eq('id',id).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Status → '+status); loadOrders(); }); }
 function markPacked(id){ sb.rpc('ob_mark_packed',{p_order:id}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Marked packed: '+id); loadOrders({render:true}); loadUnits(); }); }
 function retireUnit(uid){ if(!confirm('Remove '+uid+' from the online reserve? It will no longer be sold online.')) return; sb.rpc('ob_retire_unit',{p_store:STORE_ID,p_uid:uid}).then(function(res){ if(res.error){toast('Error: '+res.error.message);return;} toast('Removed from online: '+uid); loadUnits().then(function(){ renderInventory(); renderDashboard(); }); }); }
@@ -698,6 +722,47 @@ function loadStaff(){
 function can(perm){ var m=state.me; if(!m) return true; if(m.role==='owner') return true; return !!m[perm]; }
 function meShopAllowed(id){ var m=state.me; if(!m||m.role==='owner') return true; if(!m.shop_ids||!m.shop_ids.length) return true; return m.shop_ids.indexOf(id)>-1; }
 function shopName(id){ var s=(state.shops||[]).filter(function(x){return x.id===id;})[0]; return s?s.name:id; }
+
+function healthEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function healthAgo(iso){ var s=Math.max(0,Math.floor((Date.now()-new Date(iso).getTime())/1000)); if(s<60) return s+'s ago'; var m=Math.floor(s/60); if(m<60) return m+'m ago'; var h=Math.floor(m/60); return h+'h ago'; }
+var HEALTH_LABEL={ cybersource:'Payments (Cybersource)', supabase:'Database (Supabase)', brevo:'Email (Brevo)', cloudpos:'POS (CloudPOS)' };
+var HEALTH_ORDER={ cybersource:0, supabase:1, brevo:2, cloudpos:3 };
+var healthTimer=null;
+function renderHealth(){
+  var host=el('p-health'); if(!host) return;
+  host.innerHTML='<div class="section-head"><h2>System status</h2><button class="btn ghost sm" onclick="loadHealth()">Refresh</button></div><div id="health-body"><div class="loading">Loading...</div></div>';
+  loadHealth();
+  if(healthTimer) clearInterval(healthTimer);
+  healthTimer=setInterval(function(){ var p=el('p-health'); if(p&&p.classList.contains('on')) loadHealth(); else if(healthTimer){ clearInterval(healthTimer); healthTimer=null; } },30000);
+}
+function loadHealth(){
+  sb.rpc('ob_health_status').then(function(res){
+    var body=el('health-body'); if(!body) return;
+    if(res.error){ body.innerHTML='<div class="card"><p class="muted" style="font-size:13px">Could not load status: '+healthEsc(res.error.message)+'</p></div>'; return; }
+    var d=res.data||{}; var st=(d.state||[]).slice(); var incidents=d.incidents||[];
+    if(!st.length){ body.innerHTML='<div class="card"><p class="muted" style="font-size:13px">No health data yet. The monitor runs every 5 minutes.</p></div>'; return; }
+    st.sort(function(a,b){ var ra=HEALTH_ORDER[a.service]; var rb=HEALTH_ORDER[b.service]; return (ra==null?9:ra)-(rb==null?9:rb); });
+    var last=st.reduce(function(a,x){ var t=new Date(x.last_checked_at).getTime(); return t>a?t:a; },0);
+    var fresh=(Date.now()-last)<=12*60000;
+    var freshHtml='<div style="font-size:12.5px;color:'+(fresh?'#857f74':'#b5573a')+';margin:0 0 12px">Last check '+healthAgo(new Date(last).toISOString())+(fresh?'':' - monitoring may be stalled')+'</div>';
+    var cards=st.map(function(x){
+      var ok=x.ok; var dot=ok?'#2f7a4f':'#c0392b'; var bg=ok?'#eef6f0':'#fbeeea';
+      var label=HEALTH_LABEL[x.service]||x.service;
+      var det=x.last_detail?'<div style="font-size:12px;color:#857f74;margin-top:3px">'+healthEsc(x.last_detail)+'</div>':'';
+      var streak=(!ok&&x.fail_streak>1)?'<div style="font-size:12px;color:#b5573a;margin-top:2px">failed '+x.fail_streak+' checks in a row</div>':'';
+      return '<div style="border:1px solid var(--line);border-radius:10px;background:'+bg+';padding:12px 14px;display:flex;align-items:center;gap:12px">'+
+             '<span style="width:12px;height:12px;border-radius:50%;background:'+dot+';flex:none"></span>'+
+             '<div style="flex:1"><div style="font-weight:700;color:#0a1140">'+label+'</div>'+det+streak+'</div>'+
+             '<div style="text-align:right;font-size:12px;color:#857f74;white-space:nowrap">'+(ok?'OK':'DOWN')+'<br>'+healthAgo(x.last_checked_at)+'</div></div>';
+    }).join('');
+    var inc=incidents.length?incidents.map(function(i){
+      var when=new Date(i.ts).toLocaleString(); var label=HEALTH_LABEL[i.service]||i.service;
+      var col=i.ok?'#2f7a4f':'#c0392b'; var txt=i.ok?'recovered':'went DOWN';
+      return '<div class="rep-row"><span><b style="color:'+col+'">'+label+' '+txt+'</b><br><span class="muted" style="font-size:12px">'+healthEsc(when)+(i.detail?(' - '+healthEsc(i.detail)):'')+'</span></span></div>';
+    }).join(''):'<p class="muted" style="font-size:13px">No incidents recorded.</p>';
+    body.innerHTML=freshHtml+'<div style="display:grid;gap:10px;margin-bottom:18px">'+cards+'</div><div class="section-head" style="margin-top:6px"><h2 style="font-size:16px">Recent incidents</h2></div>'+inc;
+  });
+}
 
 var TAB_PERM={ scan:'can_scan', orders:'can_view_orders', picklists:'can_view_orders', routes:'can_manage_routes', shops:'can_edit_stock', users:'can_manage_users' };
 function applyGating(){
