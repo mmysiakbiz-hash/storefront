@@ -730,13 +730,13 @@ var HEALTH_ORDER={ cybersource:0, supabase:1, brevo:2, cloudpos:3 };
 var healthTimer=null;
 function renderHealth(){
   var host=el('p-health'); if(!host) return;
-  host.innerHTML='<div class="section-head"><h2>System status</h2><button class="btn ghost sm" onclick="loadHealth()">Refresh</button></div><div id="health-body"><div class="loading">Loading...</div></div>';
+  host.innerHTML='<div class="section-head"><h2>System status</h2><button class="btn ghost sm" onclick="doRefresh(this,function(){return loadHealth();})">Refresh</button></div><div id="health-body"><div class="loading">Loading...</div></div>';
   loadHealth();
   if(healthTimer) clearInterval(healthTimer);
   healthTimer=setInterval(function(){ var p=el('p-health'); if(p&&p.classList.contains('on')) loadHealth(); else if(healthTimer){ clearInterval(healthTimer); healthTimer=null; } },30000);
 }
 function loadHealth(){
-  sb.rpc('ob_health_status').then(function(res){
+  return sb.rpc('ob_health_status').then(function(res){
     var body=el('health-body'); if(!body) return;
     if(res.error){ body.innerHTML='<div class="card"><p class="muted" style="font-size:13px">Could not load status: '+healthEsc(res.error.message)+'</p></div>'; return; }
     var d=res.data||{}; var st=(d.state||[]).slice(); var incidents=d.incidents||[];
