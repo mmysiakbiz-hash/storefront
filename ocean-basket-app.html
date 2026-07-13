@@ -3198,6 +3198,7 @@ function availKg(formId){
 
 /* ---------- BACKEND ---------- */
 var API_BASE = 'https://storekit-pi.vercel.app/api/ocean-basket/v2';
+try{ window.__OB_TESTPAY = (new URLSearchParams(location.search).get('testpay')==='1'); }catch(e){ window.__OB_TESTPAY=false; }
 
 /* Load catalog from Supabase (via Vercel). Populates CATALOG, POINTS, CFG. */
 /* ---------- v2: global stock units + session + reservation helpers ---------- */
@@ -4179,13 +4180,32 @@ function b64urlToJson(seg){ var s=seg.replace(/-/g,'+').replace(/_/g,'/'); while
 function obLoadPaySdk(src,integrity){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; } s.onload=function(){res();}; s.onerror=function(){rej(new Error('Could not load the secure payment library'));}; document.head.appendChild(s); }); }
 function cancelUnpaid(no){ if(!no) return; var lk=document.getElementById('ob-cancel-link'); if(lk){ if(lk.dataset.busy) return; lk.dataset.busy='1'; lk.textContent='Cancelling\u2026'; lk.style.pointerEvents='none'; lk.style.opacity='0.6'; } fetch(API_BASE+'/cancel-unpaid',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ orderId:no }) }).then(function(r){ return r.json(); }).then(function(){ toast('Order cancelled'); go('orders'); if(typeof renderOrders==='function') renderOrders(); }).catch(function(){ go('orders'); }); }
 function payPending(no,total){ startCardPayment({ no:no, total:Number(total||0), status:'pending_payment', __resume:true }); }
+function simulateTestPay(){
+  var order=window.__payOrder; if(!order){ toast('No order to pay'); return; }
+  var b=document.getElementById('ob-testpay-btn');
+  if(b){ if(b.dataset.busy) return; b.dataset.busy='1'; b.textContent='Simulating...'; b.style.opacity='0.7'; }
+  var msg=el('pay-msg');
+  function reset(){ if(b){ b.dataset.busy=''; b.textContent='Simulate successful payment (TEST)'; b.style.opacity='1'; } }
+  fetch(API_BASE+'/test-pay',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ orderId: order.no }) })
+    .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+    .then(function(res){
+      if(res.status===403){ if(msg) msg.textContent='Test payment is disabled on the server (TEST_PAY_ENABLED off).'; reset(); return; }
+      if(!res.j || !res.j.ok){ if(msg) msg.textContent='Simulated payment failed'+((res.j&&res.j.error)?(' - '+res.j.error):'')+'.'; reset(); return; }
+      try{ var __ucb=document.getElementById('ob-uc-buttons'); if(__ucb) __ucb.innerHTML=''; var __pl2=document.getElementById('pay-loader'); if(__pl2) __pl2.style.display='none'; }catch(e){}
+      order.status = order.__travel ? 'certificate_pending' : 'paid';
+      if(order.__travel){ if(typeof renderTbDocs==='function') renderTbDocs(); go('tb-collect'); }
+      else if(order.__resume){ go('orders'); if(typeof renderOrders==='function') renderOrders(); }
+      else { renderSuccess(order); go('success'); }
+    })
+    .catch(function(e){ if(msg) msg.textContent='Simulated payment error: '+((e&&e.message)||e); reset(); });
+}
 function startCardPayment(order){
   go('pay');
   var host=el('pay-host');
   host.innerHTML='<div class="pad"><h2 style="margin:0 0 4px">Pay SCR '+Number(order.total).toFixed(2)+'</h2>'+
     '<div class="muted" id="pay-msg" style="font-size:14px;margin-bottom:12px"></div>'+
     '<div id="pay-loader" class="pay-loader"><div class="ring"></div><div class="t">Loading secure payment\u2026</div><div class="s">This takes a few seconds \u2014 please don\u2019t close the page.</div></div>'+
-    '<div id="ob-uc-buttons"></div>'+
+    '<div id="ob-uc-buttons"></div>'+(window.__OB_TESTPAY?'<div id="ob-testpay-wrap" style="margin-top:14px;text-align:center"><button id="ob-testpay-btn" class="btn" style="background:#b08900" onclick="simulateTestPay()">Simulate successful payment (TEST)</button><div class="muted" style="font-size:12px;margin-top:6px">Test mode - no real charge. Bypasses the payment gateway.</div></div>':'')+
     '<div id="pay-retry" style="display:none;margin-top:14px;text-align:center"><div class="check fail" style="margin:0 auto 14px"><svg class="cross" viewBox="0 0 52 52"><path d="M17 17l18 18M35 17l-18 18"/></svg></div><div style="font-weight:700;color:var(--ink);margin-bottom:10px">Payment could not be completed</div><button class="btn" onclick="startCardPayment(window.__payOrder)">Try again</button></div><div style="margin-top:14px;text-align:center"><a id="ob-cancel-link" href="#" onclick="cancelUnpaid(window.__payOrder&&window.__payOrder.no); return false;" style="font-size:13px;color:#a8341a;text-decoration:none">Cancel order &amp; release items</a></div></div>';
   window.__payOrder=order;
   runUnifiedCheckout(order).catch(function(e){
