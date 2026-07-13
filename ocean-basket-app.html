@@ -3016,10 +3016,11 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="go('account')"><span class="pico" data-ic="profile"></span><span class="pt">Account</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('orders')"><span class="pico" data-ic="orders"></span><span class="pt">My orders</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="go('map')"><span class="pico" data-ic="pin"></span><span class="pt">Collection points</span><span class="arr">›</span></button>
+      <button class="prof-row" onclick="openInvite()"><span class="pico" data-ic="profile"></span><span class="pt">Invite a friend</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13b · orders + qr timing</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13h · cart-persist + tb-money + holdbar + collhours</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3617,8 +3618,11 @@ function recsFor(){
   picked.sort(function(a,b){ return unitAgeKey(a)-unitAgeKey(b); });
   return picked.map(function(u){
     var g=u.weight_kg*1000, ppl=Math.max(1,Math.round(g/per)), inBand=(g>=loG-1e-6 && g<=hiG+1e-6);
-    var title = inBand ? ('Good fit \u00b7 ~'+ppl+(ppl>1?' people':' person'))
-                       : ((g>targetG?'A bit more':'A bit less')+' \u00b7 ~'+ppl+(ppl>1?' people':' person'));
+    var dp=ppl-people, plural=(ppl>1?' people':' person'), prefix;
+    if(inBand){ prefix='Good fit'; }
+    else if(g>targetG){ prefix=(dp>=2?'A lot more':'A bit more'); }
+    else { prefix=(dp<=-2?'A lot less':'A bit less'); }
+    var title = prefix+' \u00b7 ~'+ppl+plural;
     return {key:u.uid, title:title, desc:fmtKg(g)+' \u00b7 '+u.uid, uids:[u.uid], weight:u.weight_kg, people:ppl, price:u.total, exact:inBand};
   });
 }
@@ -3664,7 +3668,7 @@ function renderProduct(){
   var cuts=cutsForState(s,c.state).filter(function(x){ return x!=='heads' && x!=='portions'; });
   var cutSeg=cuts.map(function(cut){ return '<button class="'+(c.cut===cut?'on':'')+'" onclick="setPCut(\''+cut+'\')">'+CUTLBL[cut]+'</button>'; }).join('');
   var pkg=priceForCut(s,c.state,c.cut);
-  var peopleSeg=[2,4,6].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
+  var peopleSeg=[2,4,6,8].map(function(n){ return '<button class="'+(c.people===n?'on':'')+'" onclick="setPeople('+n+')">'+n+'</button>'; }).join('');
 
   var recs=recsFor(); var sel=c.sel || (recs[0]&&recs[0].key);
   var recHtml;
@@ -3745,7 +3749,6 @@ function addToCart(){
         price:rec.price, lineTotal:rec.price, exp:Date.now()+secs*1000, extended:false
       });
       state.cfg.sel=null; updateCartBadge();
-      toast(s.name+' added — held '+Math.round(secs/60)+' min');
       return loadUnits().then(function(){ showAddedSheet(s.name); });
     })
     .catch(function(){ toast('Could not reserve — check connection.'); }).finally(function(){ btnDone(_b); });
@@ -3769,10 +3772,21 @@ function closeAddedSheet(){ var o=document.getElementById('addedsheet'); if(o) o
 /* ---------- CART (v2 — reservation + countdown) ---------- */
 function cartSubtotal(){ return state.cart.reduce(function(s,i){return s+i.lineTotal},0); }
 function updateCartBar(){ var bar=el('cartbar'); if(!bar) return; var n=state.cart.length; var show = n>0 && (state.screen==='home' || state.screen==='shop'); if(show){ var c=el('cartbar-n'); if(c) c.textContent=n; bar.classList.add('show'); document.body.classList.add('cartbar-on'); } else { bar.classList.remove('show'); document.body.classList.remove('cartbar-on'); } }
+function saveCart(){ try{ if(state.cart&&state.cart.length){ localStorage.setItem('ob_cart_v1', JSON.stringify(state.cart)); } else { localStorage.removeItem('ob_cart_v1'); } }catch(e){} }
+function restoreCart(){
+  try{
+    var raw=localStorage.getItem('ob_cart_v1'); if(!raw) return;
+    var arr=JSON.parse(raw); if(!Array.isArray(arr)){ localStorage.removeItem('ob_cart_v1'); return; }
+    var now=Date.now();
+    arr=arr.filter(function(l){ return l && l.exp && l.exp>now && l.uids && l.uids.length; });
+    if(arr.length){ state.cart=arr; } else { localStorage.removeItem('ob_cart_v1'); }
+  }catch(e){ try{ localStorage.removeItem('ob_cart_v1'); }catch(_){} }
+}
 function updateCartBadge(){
   var n=state.cart.length, b=el('navcart');
   if(b){ if(n>0){ b.style.display='flex'; b.textContent=n; } else { b.style.display='none'; } }
   updateCartBar();
+  saveCart();
 }
 function cartMinExp(){ if(!state.cart.length) return 0; return Math.min.apply(null, state.cart.map(function(l){ return l.exp||0; })); }
 function remainSec(){ var e=cartMinExp(); if(!e) return 0; return Math.max(0, Math.round((e-Date.now())/1000)); }
@@ -3846,6 +3860,7 @@ function extendCart(){
     .then(function(res){
       var add=((res&&res.added)||180)*1000;
       state.cart.forEach(function(l){ if(!l.extended){ l.exp=(l.exp||Date.now())+add; l.extended=true; } });
+      saveCart();
       toast('Extended by '+Math.round(((res&&res.added)||180)/60)+' min');
       if(state.screen==='cart') renderCart();
     }).catch(function(){ toast('Could not extend.'); }).finally(function(){ btnDone(_b); });
@@ -3884,6 +3899,10 @@ function ensureGlobalHold(){
   '</div>';
   document.body.appendChild(d);
 }
+function holdSummary(kind){
+  if(kind==='travel'){ var tn=(state.tb&&state.tb.items?state.tb.items.length:0); return {n:tn, amt:tbSubtotal()}; }
+  var cn=(state.cart?state.cart.length:0); var ct=(state.cart||[]).reduce(function(a,l){ return a+(l.lineTotal||l.price||0); },0); return {n:cn, amt:ct};
+}
 function syncGlobalHold(){
   ensureGlobalHold();
   var bar=document.getElementById('globalhold'); var app=el('app');
@@ -3905,7 +3924,8 @@ function syncGlobalHold(){
   }
   inner.style.background='#f5a623'; inner.style.color='#0a1140';
   cd.style.display=''; cd.textContent=mmss(rem); cd.style.color='#0a1140';
-  tx.textContent='Your stock is held while the timer runs.'; tx.style.color='#0a1140';
+  var __hs=holdSummary(kind);
+  tx.innerHTML='<b style="font-size:12.5px;font-weight:800">'+__hs.n+' item'+(__hs.n===1?'':'s')+' \u00b7 '+money(__hs.amt)+'</b><br><span style="font-size:10px;opacity:.85;font-weight:600">Held while the timer runs</span>'; tx.style.color='#0a1140';
   ext.style.display=canExt?'':'none';
   ext.onclick=(kind==='travel')?function(){ extendTravel(); }:function(){ extendCart(); };
   bar.style.display='block'; if(app) app.style.paddingTop=''; try{ var __hh=bar.offsetHeight||44; document.documentElement.style.setProperty('--hold-h', __hh+'px'); }catch(e){} document.body.classList.add('hold-on');
@@ -4138,6 +4158,31 @@ async function placeOrder(){
 }
 /* ---------- SUCCESS ---------- */
 function qrSvg(t){ try{ var q=window.qrcode(0,'M'); q.addData(String(t)); q.make(); return q.createSvgTag({cellSize:4,margin:2}); }catch(e){ return ''; } }
+function closeInvite(){ var o=document.getElementById('invite-sheet'); if(o) o.remove(); }
+function inviteShare(){ var url='https://oceanbasket.app'; if(navigator.share){ navigator.share({title:'Ocean Basket Seychelles',text:'Order fresh fish from Ocean Basket Seychelles',url:url}).catch(function(){}); } else { inviteCopy(); } }
+function inviteCopy(){ var url='https://oceanbasket.app'; try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(function(){ toast('Link copied'); }).catch(function(){ toast(url); }); } else { toast(url); } }catch(e){ toast(url); } }
+function openInvite(){
+  closeInvite();
+  var url='https://oceanbasket.app';
+  var qr=qrSvg(url); if(qr){ qr=qr.replace('<svg ','<svg style="width:100%;height:auto;display:block" '); }
+  var canShare=!!(navigator.share);
+  var ov=document.createElement('div'); ov.id='invite-sheet';
+  ov.style.cssText='position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(10,14,30,.45)';
+  ov.onclick=function(e){ if(e.target===ov) closeInvite(); };
+  ov.innerHTML=
+    '<div style="background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 28px;max-width:520px;width:100%;margin:0 auto;box-sizing:border-box">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+        '<h3 style="margin:0;font-size:18px;color:#0a1140">Invite a friend</h3>'+
+        '<button onclick="closeInvite()" aria-label="Close" style="border:0;background:transparent;font-size:24px;line-height:1;color:#857f74;cursor:pointer">\u00d7</button>'+
+      '</div>'+
+      '<p style="margin:0 0 16px;color:#5b6472;font-size:13.5px">Scan to open Ocean Basket and order fresh fish.</p>'+
+      '<div style="display:flex;justify-content:center;margin:4px 0 14px"><div style="width:190px;padding:12px;background:#fff;border:1px solid #e7edf3;border-radius:14px">'+qr+'</div></div>'+
+      '<div style="text-align:center;font-weight:700;color:#0a1140;font-size:15px;margin-bottom:16px">oceanbasket.app</div>'+
+      (canShare?'<button onclick="inviteShare()" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px">Share link</button>':'')+
+      '<button onclick="inviteCopy()" style="width:100%;background:#fff;color:#0a1140;border:1px solid #cfd8e3;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer">Copy link</button>'+
+    '</div>';
+  document.body.appendChild(ov);
+}
 function _tkRound(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function _tkWrap(ctx,text,cx,y,maxW,lh){ var w=String(text).split(' '),line='',yy=y,i,t2; for(i=0;i<w.length;i++){ t2=line?line+' '+w[i]:w[i]; if(ctx.measureText(t2).width>maxW && line){ ctx.fillText(line,cx,yy); line=w[i]; yy+=lh; } else { line=t2; } } if(line) ctx.fillText(line,cx,yy); return yy; }
 function _tkQR(ctx,text,x,y,size){ try{ var q=window.qrcode(0,'M'); q.addData(String(text)); q.make(); var n=q.getModuleCount(), cell=size/n, r,c; ctx.fillStyle='#0a1140'; for(r=0;r<n;r++){ for(c=0;c<n;c++){ if(q.isDark(r,c)) ctx.fillRect(Math.floor(x+c*cell),Math.floor(y+r*cell),Math.ceil(cell),Math.ceil(cell)); } } }catch(e){} }
@@ -4591,7 +4636,7 @@ var CHAT_KB = [
   { q:'What are your opening hours?', cat:'Collection', a:'Our outlets are open until 18:00, and the Providence counter opens from 08:00. Online ordering is available any time.' },
   // ----- Travel Box -----
   { q:'What is a Travel Box?', cat:'Travel Box', a:'A <b>Travel Box</b> is airline-compliant, chilled packing for flying with fish. Start it from the home screen — you enter your flight details first, then choose your fish. Collection is at one of our four outlets so you can inspect before sealing.' },
-  { q:'How much fish can I fly with?', cat:'Travel Box', a:'It depends on your destination — for example Mauritius allows about 7&nbsp;kg, Europe up to 20&nbsp;kg. The app checks your flight and shows your allowance before you shop. Always confirm with your airline too.' },
+  { q:'How much fish can I fly with?', cat:'Travel Box', a:'Each Travel Box holds up to 20&nbsp;kg net of fish. Baggage allowances vary by airline and route, so please confirm your limit with your airline before you fly.' },
   { q:'Where do I collect a Travel Box?', cat:'Travel Box', a:'Travel Boxes can only be collected at our four outlets (Beau Vallon, Plaisance, STC, Providence) so you can inspect the fish before the box is sealed. They are not sent to freezer points.' },
   { q:'Do I get export documents?', cat:'Travel Box', a:'Yes — your Travel Box includes a commercial invoice, packing list and food-safety declaration. We collect your traveller details for the certificate after you confirm.' },
   // ----- Payment / general -----
@@ -4692,11 +4737,12 @@ var TB_DEST = [
 ];
 var TB_AIRLINES = ['Air Seychelles','Emirates','Qatar Airways','Etihad','Ethiopian Airlines','Kenya Airways','Condor','Other'];
 
-/* box sizes (capacity kg) — app picks smallest that fits */
+/* box sizes: cap = capacity kg; price = per-box service charge (SCR).
+   PRELIMINARY prices pending Louis confirmation — adjust the three numbers here. */
 var TB_BOXES = [
-  {id:'s', name:'Small Travel Box', cap:5},
-  {id:'m', name:'Medium Travel Box', cap:10},
-  {id:'l', name:'Large Travel Box', cap:20}
+  {id:'s', name:'Small Travel Box', cap:5,  price:80},
+  {id:'m', name:'Medium Travel Box', cap:10, price:120},
+  {id:'l', name:'Large Travel Box', cap:20, price:160}
 ];
 
 /* travel-box outlets = the 4 collection outlets only */
@@ -4717,8 +4763,20 @@ function extendTravel(){
     .catch(function(){ toast('Could not extend.'); }).finally(function(){ btnDone(_b); });
 }
 function tbHoldBar(){ return ''; /* unified: pinned #globalhold shows on all screens */ if(!state.tb||!state.tb.items.length) return ''; var rs=tbRemainSec(); return '<div class="hold-bar'+(rs<=0?' expired':'')+'" style="margin:12px 18px 0"><span class="ht cd">'+mmss(rs)+'</span><span class="hx">'+(rs>0?'Your Travel Box is held and hidden from public availability while it ticks.':'Hold expired \u2014 items released. Add fish again.')+'</span>'+((rs>0&&tbAnyExt())?'<button onclick="extendTravel()">Extend</button>':'')+'</div>'; }
-function tbBoxPreview(w){ var b,l; if(w<=5){b=1;l='1 Small Box';} else if(w<=10){b=1;l='1 Medium Box';} else if(w<=15){b=1;l='1 Large Box';} else {b=2;l='1 Large Box + 1 Medium Box';} return {boxes:b,label:l}; }
-function tbServiceCharge(){ return tbBoxPreview(tbWeight()).boxes * (CFG.servicePerBox!=null?CFG.servicePerBox:80); }
+function tbBoxById(id){ return TB_BOXES.filter(function(b){return b.id===id;})[0]; }
+function tbBoxPrice(b){ return (b && b.price!=null) ? Number(b.price) : (CFG.servicePerBox!=null?CFG.servicePerBox:80); }
+function tbBoxPreview(w){
+  var s=tbBoxById('s'), m=tbBoxById('m'), l=tbBoxById('l');
+  if(w<=5)  return {boxes:1, label:'1 Small Box',  alloc:[s]};
+  if(w<=10) return {boxes:1, label:'1 Medium Box', alloc:[m]};
+  if(w<=15) return {boxes:1, label:'1 Large Box',  alloc:[l]};
+  return {boxes:2, label:'1 Large Box + 1 Medium Box', alloc:[l,m]};
+}
+function tbServiceCharge(){ return tbBoxPreview(tbWeight()).alloc.reduce(function(a,b){ return a+tbBoxPrice(b); },0); }
+function tbServiceLabel(alloc){
+  if(alloc.length===1){ var b=alloc[0]; return b.name.replace(' Travel Box','')+' box \u00d7 '+money(tbBoxPrice(b)); }
+  return alloc.map(function(b){ return b.name.replace(' Travel Box','')+' '+money(tbBoxPrice(b)); }).join(' + ');
+}
 function tbCertCharge(){ return CFG.certCharge!=null?CFG.certCharge:50; }
 function tbTotal(){ return tbSubtotal()+tbServiceCharge()+tbCertCharge(); }
 
@@ -4734,7 +4792,7 @@ function renderTbFlight(){
   el('tb-flight-host').innerHTML='<div class="pad">'+
     '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. Maximum net weight '+tbCap()+' kg.</p>'+
     '<div class="field"><label>Collection shop *</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
-    '<div class="field"><label>Collection date &amp; time *</label><input id="tb-cdt" type="datetime-local" min="'+tomorrow+'T00:00" value="'+(t.collectionAt||'')+'" oninput="tbSyncFlightMin(this.value)"></div>'+
+    '<div class="field"><label>Collection date &amp; time * <small style="opacity:.7;font-weight:400">(08:00\u201317:00)</small></label><input id="tb-cdt" type="datetime-local" min="'+tomorrow+'T00:00" value="'+(t.collectionAt||'')+'" oninput="tbSyncFlightMin(this.value)"></div>'+
     '<div class="field"><label>Flight date &amp; time *</label><input id="tb-fdt" type="datetime-local" min="'+(t.collectionAt||(tomorrow+'T00:00'))+'" value="'+(t.flightAt||'')+'"></div>'+
     '<div class="field"><label>Destination (optional)</label>'+obSelectHTML('sel-dest', destOptions, t.destination||'', 'Select destination')+'</div>'+
     '<div class="field"><label>Airline (optional)</label>'+obSelectHTML('sel-air', airOptions, t.airline||'', 'Select airline')+'</div>'+
@@ -4763,6 +4821,8 @@ function tbValidateFlight(){
   var coll=new Date(t.collectionAt), fl=new Date(t.flightAt);
   var tomorrow=new Date(); tomorrow.setHours(0,0,0,0); tomorrow.setDate(tomorrow.getDate()+1);
   if(coll < tomorrow){ tbReject('Travel boxes are prepared for next-day collection. Please choose a collection time from tomorrow onwards.'); return; }
+  var __ct=(t.collectionAt||'').slice(11,16), __cm=(parseInt(__ct.slice(0,2),10)||0)*60+(parseInt(__ct.slice(3,5),10)||0);
+  if(__cm<480 || __cm>1020){ tbReject('Collection time must be between 08:00 and 17:00.'); return; }
   if(fl <= coll){ tbReject('Your flight time must be after your collection time.'); return; }
   if(fl - coll < 3600000){ tbReject('Please leave at least 1 hour between collection and your flight.'); return; }
   t.collectionDate=t.collectionAt.slice(0,10); t.collectionTime=t.collectionAt.slice(11,16);
@@ -4792,11 +4852,11 @@ function renderTbShop(){
   renderTbMeter();
 }
 function renderTbMeter(){
-  var w=tbWeight(), cap=tbCap(), pct=Math.min(100,Math.round(w/cap*100)), over=w>cap;
+  var w=tbWeight(), cap=tbCap(), pct=Math.min(100,Math.round(w/cap*100)), over=w>cap, sub=tbSubtotal();
   var host=el('tb-meter'); if(!host) return;
-  host.innerHTML='<div class="wm-top"><span class="wm-now">'+w.toFixed(2)+' kg <small>/ '+cap+' kg cap</small></span><span class="wm-cap">'+pct+'%</span></div>'+
+  host.innerHTML='<div class="wm-top"><span class="wm-now">'+w.toFixed(2)+' kg <small>/ '+cap+' kg cap</small></span><span class="wm-cap">'+money(sub)+' \u00b7 '+pct+'%</span></div>'+
     '<div class="bar"><i class="'+(over?'over':'')+'" style="width:'+pct+'%"></i></div>'+
-    '<button class="btn wm-btn" '+(w<=0?'disabled':'')+' onclick="tbToBox()">Review box ('+w.toFixed(2)+' kg)</button>';
+    '<button class="btn wm-btn" '+(w<=0?'disabled':'')+' onclick="tbToBox()">Review box \u00b7 '+w.toFixed(2)+' kg \u00b7 '+money(sub)+'</button>';
 }
 
 /* called from the product screen when adding in travel mode */
@@ -4833,7 +4893,6 @@ function tbToBox(){ if(tbWeight()<=0){ toast('Add some fish first'); return; } r
 /* ----- screen 4: box allocation + charges ----- */
 function renderTbBox(){
   var w=tbWeight(), prev=tbBoxPreview(w), sub=tbSubtotal(), svc=tbServiceCharge(), cert=tbCertCharge();
-  var perBox=CFG.servicePerBox!=null?CFG.servicePerBox:80;
   var lines = state.tb.items.map(function(it){
     var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams));
     return '<div class="cart-item"><div class="ph">'+(it.photo?'<img src="'+it.photo+'" alt="">':'<span class="fishline">'+svg(iconForId(it.speciesId),34,1.2)+'</span>')+'</div>'+
@@ -4844,14 +4903,14 @@ function renderTbBox(){
     '<div class="box-card">'+
       '<div class="rec">Allocated packing</div>'+
       '<h3>'+prev.label+'</h3>'+
-      '<div class="cap">'+w.toFixed(2)+' kg net \u00b7 max '+tbCap()+' kg</div>'+
+      '<div class="cap">net '+w.toFixed(2)+' kg of '+tbCap()+' kg max</div>'+
       '<div class="box-ic">'+svg('travel',64,1)+'</div>'+
       '<div class="box-spec">'+
         '<div class="box-check">'+svg('check',16,1.6)+' Insulated foam box + ice packs</div>'+
         '<div class="box-check">'+svg('check',16,1.6)+' Leak-proof &amp; airline compliant</div>'+
         '<div class="box-check">'+svg('check',16,1.6)+' Export documents prepared</div>'+
         '<div class="r" style="margin-top:10px;border-top:1px solid var(--line);padding-top:12px"><span class="k">Fish subtotal</span><span class="v">'+money2(sub)+'</span></div>'+
-        '<div class="r"><span class="k">Service ('+prev.boxes+' box'+(prev.boxes>1?'es':'')+' \u00d7 '+money(perBox)+')</span><span class="v">'+money2(svc)+'</span></div>'+
+        '<div class="r"><span class="k">Service ('+tbServiceLabel(prev.alloc)+')</span><span class="v">'+money2(svc)+'</span></div>'+
         '<div class="r"><span class="k">Health certificate</span><span class="v">'+money2(cert)+'</span></div>'+
         '<div class="r" style="border-top:1px solid var(--line);padding-top:10px;font-weight:700"><span class="k">Total</span><span class="v">'+money2(sub+svc+cert)+'</span></div>'+
       '</div>'+
@@ -5048,6 +5107,7 @@ function ibPreview(withArrow){
 });
 updateCartBadge();
 document.querySelectorAll('[data-ic]').forEach(function(n){ n.insertAdjacentHTML('afterbegin', svg(n.getAttribute('data-ic'),22,1.4)); });
+try{ restoreCart(); updateCartBadge(); }catch(e){}
 go('home');
 
 /* pull live catalog from Supabase; re-render shop if user is already there */
