@@ -105,6 +105,7 @@ body.cartbar-on .screen{padding-bottom:62px}
 button.is-loading{pointer-events:none}
 .btnspin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:btnspin .6s linear infinite;vertical-align:middle}
 .btnspin.d{border-color:rgba(10,17,64,.22);border-top-color:var(--ink)}
+#acct-box .btnspin.d{border-color:rgba(255,255,255,.5);border-top-color:#fff}
 @keyframes btnspin{to{transform:rotate(360deg)}}
 .btn.gilt{background:var(--gilt)}
 .btn.teal{background:var(--ink2)}
@@ -3021,7 +3022,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13i · collection date+time picker (08-17) + earlier</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13j · free-delivery bar + flight date+time + account loaders</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3926,7 +3927,9 @@ function syncGlobalHold(){
   inner.style.background='#f5a623'; inner.style.color='#0a1140';
   cd.style.display=''; cd.textContent=mmss(rem); cd.style.color='#0a1140';
   var __hs=holdSummary(kind);
-  tx.innerHTML='<b style="font-size:12.5px;font-weight:800">'+__hs.n+' item'+(__hs.n===1?'':'s')+' \u00b7 '+money(__hs.amt)+'</b><br><span style="font-size:10px;opacity:.85;font-weight:600">Held while the timer runs</span>'; tx.style.color='#0a1140';
+  var __note='Held while the timer runs';
+  if(kind==='local'){ var __ff=(CFG.freeFrom!=null?CFG.freeFrom:2000); __note=(__hs.amt>=__ff)?('\u2713 Free home delivery unlocked'):(money(__ff-__hs.amt)+' more for free delivery'); }
+  tx.innerHTML='<b style="font-size:12.5px;font-weight:800">'+__hs.n+' item'+(__hs.n===1?'':'s')+' \u00b7 '+money(__hs.amt)+'</b><br><span style="font-size:10px;opacity:.85;font-weight:600">'+__note+'</span>'; tx.style.color='#0a1140';
   ext.style.display=canExt?'':'none';
   ext.onclick=(kind==='travel')?function(){ extendTravel(); }:function(){ extendCart(); };
   bar.style.display='block'; if(app) app.style.paddingTop=''; try{ var __hh=bar.offsetHeight||44; document.documentElement.style.setProperty('--hold-h', __hh+'px'); }catch(e){} document.body.classList.add('hold-on');
@@ -4793,9 +4796,10 @@ function renderTbFlight(){
   el('tb-flight-host').innerHTML='<div class="pad">'+
     '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. Maximum net weight '+tbCap()+' kg.</p>'+
     '<div class="field"><label>Collection shop *</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
-    '<div class="field"><label>Collection date *</label><input id="tb-cdate" type="date" min="'+tomorrow+'" value="'+((t.collectionAt||'').slice(0,10))+'" oninput="tbSyncColl()"></div>'+
-    '<div class="field"><label>Collection time * <small style="opacity:.7;font-weight:400">(08:00\u201317:00)</small></label><select id="tb-ctime" onchange="tbSyncColl()">'+tbTimeOpts(((t.collectionAt||'').slice(11,16))||'08:00')+'</select></div>'+
-    '<div class="field"><label>Flight date &amp; time *</label><input id="tb-fdt" type="datetime-local" min="'+(t.collectionAt||(tomorrow+'T00:00'))+'" value="'+(t.flightAt||'')+'"></div>'+
+    '<div style="display:flex;gap:10px"><div class="field" style="flex:1.5;margin-bottom:14px"><label>Collection date *</label><input id="tb-cdate" type="date" min="'+tomorrow+'" value="'+((t.collectionAt||'').slice(0,10))+'" oninput="tbSyncColl()"></div>'+
+    '<div class="field" style="flex:1;margin-bottom:14px"><label>Time <small style="opacity:.7;font-weight:400">(08\u201317)</small></label><select id="tb-ctime" onchange="tbSyncColl()">'+tbTimeOpts(((t.collectionAt||'').slice(11,16))||'08:00')+'</select></div></div>'+
+    '<div style="display:flex;gap:10px"><div class="field" style="flex:1.5;margin-bottom:14px"><label>Flight date *</label><input id="tb-fdate" type="date" min="'+((t.collectionAt||'').slice(0,10)||tomorrow)+'" value="'+((t.flightAt||'').slice(0,10))+'" onchange="tbSyncFlight()"></div>'+
+    '<div class="field" style="flex:1;margin-bottom:14px"><label>Flight time *</label><input id="tb-ftime" type="time" value="'+((t.flightAt||'').slice(11,16))+'" onchange="tbSyncFlight()"></div></div>'+
     '<div class="field"><label>Destination (optional)</label>'+obSelectHTML('sel-dest', destOptions, t.destination||'', 'Select destination')+'</div>'+
     '<div class="field"><label>Airline (optional)</label>'+obSelectHTML('sel-air', airOptions, t.airline||'', 'Select airline')+'</div>'+
     '<div class="field"><label>Flight number (optional)</label><input id="tb-fno" placeholder="e.g. HM 708" value="'+(t.flightNo||'')+'"></div>'+
@@ -4808,11 +4812,11 @@ window._obselCallbacks['sel-dest']=function(v){ state.tb.destination=v; var b=do
 window._obselCallbacks['sel-air']=function(v){ state.tb.airline=v; var b=document.querySelector('#sel-air .obsel-val'); if(b){ b.textContent=v; b.classList.remove('placeholder'); } };
 
 function tbTimeOpts(sel){ var o='',h,m,v; for(h=8;h<=17;h++){ for(m=0;m<60;m+=30){ if(h===17&&m>0) break; v=(h<10?'0':'')+h+':'+(m<10?'0':'')+m; o+='<option value="'+v+'"'+(sel===v?' selected':'')+'>'+v+'</option>'; } } return o; }
-function tbSyncColl(){ var d=el('tb-cdate'), tm=el('tb-ctime'); if(!d||!tm) return; var v=d.value?(d.value+'T'+(tm.value||'08:00')):''; state.tb.collectionAt=v; tbSyncFlightMin(v); }
-function tbSyncFlightMin(v){ var f=el('tb-fdt'); if(!f) return; f.min=v; if(f.value && f.value < v){ f.value=v; } }
+function tbSyncColl(){ var d=el('tb-cdate'), tm=el('tb-ctime'); if(!d||!tm) return; state.tb.collectionAt=d.value?(d.value+'T'+(tm.value||'08:00')):''; var fd=el('tb-fdate'); if(fd && d.value){ fd.min=d.value; if(fd.value && fd.value<d.value){ fd.value=d.value; } tbSyncFlight(); } }
+function tbSyncFlight(){ var fd=el('tb-fdate'), ft=el('tb-ftime'); if(!fd||!ft) return; state.tb.flightAt=(fd.value&&ft.value)?(fd.value+'T'+ft.value):''; }
 function tbValidateFlight(){
   var t=state.tb;
-  var __cd=el('tb-cdate'), __ctm=el('tb-ctime'); t.collectionAt=(__cd&&__cd.value)?(__cd.value+'T'+((__ctm&&__ctm.value)||'08:00')):''; t.flightAt=el('tb-fdt').value; t.flightNo=el('tb-fno').value.trim();
+  var __cd=el('tb-cdate'), __ctm=el('tb-ctime'); t.collectionAt=(__cd&&__cd.value)?(__cd.value+'T'+((__ctm&&__ctm.value)||'08:00')):''; var __fd=el('tb-fdate'), __ft=el('tb-ftime'); t.flightAt=(__fd&&__fd.value&&__ft&&__ft.value)?(__fd.value+'T'+__ft.value):''; t.flightNo=el('tb-fno').value.trim();
   var ex=el('tb-rej'); if(ex){ ex.remove(); }
   function tbReject(msg){
     var pad=el('tb-flight-host').querySelector('.pad'); var p=el('tb-rej'); if(p){ p.remove(); }
@@ -5230,49 +5234,60 @@ window.addEventListener('load', function(){ try{ if(location.pathname.indexOf('o
     }catch(err){ b.innerHTML='<div style="padding:12px;color:#a8341a;font-size:13px;background:#fff;border:1px solid #e4ddcf;border-radius:12px;margin:8px 0">Account error: '+((err&&err.message)||err)+'</div>'; }
   }
   async function forgotPw(){
+    var _b=takeBtn();
     var v=vals(); msg('');
     if(!v.email){ msg('Enter your email above first.'); return; }
+    btnSpin(_b);
     try{
       var r=await sbc.auth.resetPasswordForEmail(v.email,{redirectTo:location.origin+location.pathname});
       if(r.error){
         var e=r.error; try{ console.error('OB reset error:', e); }catch(_){}
         var detail=[e.name,(e.status!=null?('HTTP '+e.status):''),e.code,e.message].filter(Boolean).join(' \u00b7 ');
+        btnDone(_b);
         msg(detail||'Reset failed with an empty error \u2014 check Supabase \u2192 Auth \u2192 Logs.');
         return;
       }
+      btnDone(_b);
       msg('Check your email for a password-reset link.');
     }catch(err){
       try{ console.error('OB reset threw:', err); }catch(_){}
+      btnDone(_b);
       msg('Reset error: '+((err&&(err.message||err.name))||'network/unknown'));
     }
   }
   async function setNewPw(){
+    var _b=takeBtn();
     var np=((document.getElementById('acct-newpass')||{}).value)||''; msg('');
     if(np.length<6){ msg('Password must be at least 6 characters.'); return; }
+    btnSpin(_b);
     var r=await sbc.auth.updateUser({password:np});
-    if(r.error){ msg(errText(r.error)); return; }
+    if(r.error){ btnDone(_b); msg(errText(r.error)); return; }
     recoveryMode=false;
     try{ history.replaceState(null,'',location.pathname); }catch(e){}
     render();
   }
   async function signIn(){
+    var _b=takeBtn();
     var v=vals(); msg('');
     if(!v.email||!v.pass){ msg('Enter email and password.'); return; }
+    btnSpin(_b);
     var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
-    if(r.error){ msg(errText(r.error)); return; }
+    if(r.error){ btnDone(_b); msg(errText(r.error)); return; }
     render(); refreshOrders();
   }
   async function signUp(){
+    var _b=takeBtn();
     var v=vals(); msg('');
     if(!v.email||v.pass.length<6){ msg('Enter email and a password of at least 6 characters.'); return; }
+    btnSpin(_b);
     try{
       var resp=await fetch(API+'/customer-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:v.email,password:v.pass,name:v.name,phone:v.phone})});
       var out={}; try{ out=await resp.json(); }catch(e){}
-      if(!out.exists && (!resp.ok || out.error)){ msg(errText(out.error)||('Sign-up failed ('+resp.status+')')); return; }
+      if(!out.exists && (!resp.ok || out.error)){ btnDone(_b); msg(errText(out.error)||('Sign-up failed ('+resp.status+')')); return; }
       var r=await sbc.auth.signInWithPassword({email:v.email,password:v.pass});
-      if(r.error){ msg(out.exists?'This email already has an account — use “Sign in” or “Forgot password?”.':errText(r.error)); return; }
+      if(r.error){ btnDone(_b); msg(out.exists?'This email already has an account — use “Sign in” or “Forgot password?”.':errText(r.error)); return; }
       render();
-    }catch(e){ msg('Network error — try again.'); }
+    }catch(e){ btnDone(_b); msg('Network error — try again.'); }
   }
   sbc.auth.onAuthStateChange(function(evt){ if(evt==='PASSWORD_RECOVERY'){ recoveryMode=true; if(typeof go==='function') go('account'); render(); } });
   window.obSuccessAccount=async function(pemail){

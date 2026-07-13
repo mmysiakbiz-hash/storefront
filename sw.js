@@ -1,6 +1,6 @@
 // Ocean Basket service worker — network-first, cache fallback.
 // Bump CACHE_VERSION to force-refresh installed clients.
-const CACHE_VERSION = 'ob-v46';
+const CACHE_VERSION = 'ob-v47';
 const CORE = ['./ocean-basket-app.html', './manifest.json', './ob-icon-192.png', './ob-icon-512.png'];
 
 self.addEventListener('install', function(e){
