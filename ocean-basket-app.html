@@ -3019,7 +3019,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13a · orders resilience</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13b · orders + qr timing</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -4506,9 +4506,6 @@ function orderCardLive(o){
         ? '<button class="btn" style="width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>'
         : '<button class="btn ghost" disabled style="width:100%;opacity:.5;cursor:not-allowed">Show collection QR</button>')+
     '</div>';
-  } else if(isColl && !cancelled && o.status!=='pending_payment' && o.status!=='completed' && o.status!=='collected'){
-    // Before "ready" (e.g. preparing/packed): let the customer view their QR normally.
-    qrCTA='<button class="btn ghost" style="margin-top:12px;width:100%" onclick="showOrderQR(\''+o.order_no+'\')">Show collection QR</button>';
   }
   var __items=orderItemsSummary(o);
   var __finished=(o.status==='collected'||o.status==='completed'||o.status==='cancelled'||o.status==='refunded');
