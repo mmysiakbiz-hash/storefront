@@ -3019,7 +3019,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-06-18b · travel datetime</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13a · orders resilience</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3144,6 +3144,19 @@ function saveOrderNo(no){
 function savedOrderNos(){
   try{ return JSON.parse(localStorage.getItem('ob_orders')||'[]'); }catch(e){ return []; }
 }
+/* last-known-good order objects, keyed by code, so a transient fetch failure
+   (429 rate-limit / 5xx / network blip) never blanks a card the user already saw */
+function cacheOrder(o){
+  try{
+    if(!o || !o.order_no) return;
+    var m=JSON.parse(localStorage.getItem('ob_orders_cache')||'{}');
+    m[o.order_no]=o;
+    localStorage.setItem('ob_orders_cache', JSON.stringify(m));
+  }catch(e){}
+}
+function cachedOrder(no){
+  try{ var m=JSON.parse(localStorage.getItem('ob_orders_cache')||'{}'); return m[no]||null; }catch(e){ return null; }
+}
 function fetchStatus(no){
   return fetch(API_BASE+'/order-status?no='+encodeURIComponent(no))
     .then(function(r){ if(r.status===404){ return {__missing:no}; } return r.ok ? r.json() : null; })
@@ -3151,9 +3164,11 @@ function fetchStatus(no){
       if(!d) return null;
       if(d.__missing) return d;
       var o=d.order||{};
-      return { order_no:o.id, created_at:o.created_at, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment,
+      var norm={ order_no:o.id, created_at:o.created_at, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment,
                drop_point_id:o.drop_point_id, door_code:o.door_code, shop_id:o.shop_id,
                boxes_label:o.boxes_label, status:o.status, items:d.items||[] };
+      try{ cacheOrder(norm); }catch(e){}
+      return norm;
     })
     .catch(function(){ return null; });
 }
@@ -3162,6 +3177,8 @@ function pruneOrderNo(no){
   try{
     var list=JSON.parse(localStorage.getItem('ob_orders')||'[]').filter(function(x){ return x!==no; });
     localStorage.setItem('ob_orders', JSON.stringify(list));
+    var m=JSON.parse(localStorage.getItem('ob_orders_cache')||'{}');
+    if(m[no]){ delete m[no]; localStorage.setItem('ob_orders_cache', JSON.stringify(m)); }
   }catch(e){}
 }
 
@@ -4314,6 +4331,9 @@ function renderSuccess(order){
 function emptyOrdersHTML(){
   return '<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>No orders yet</h3><p>Your orders will show up here once you place one \u2014 or enter an order code above to track one.</p><button class="btn gilt" style="width:auto;margin-top:6px" onclick="go(\'shop\')">Shop Fish</button></div>';
 }
+function ordersRefreshFailHTML(){
+  return '<div class="empty"><div class="bigico">'+svg('orders',60,1)+'</div><h3>Couldn\u2019t refresh your orders</h3><p>We couldn\u2019t reach the server just now. Your orders are safe \u2014 tap retry.</p><button class="btn gilt" style="width:auto;margin-top:6px" onclick="renderOrders()">Retry</button></div>';
+}
 function orderLookupHTML(){
   return '<div class="pad" style="padding-top:4px;padding-bottom:0"><div style="display:flex;gap:8px">'+
     '<input id="order-lookup" autocomplete="off" placeholder="Enter order code (OCB-\u2026)" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();lookupOrder();}">'+
@@ -4374,23 +4394,30 @@ async function reorder(no){
 }
 async function renderOrders(){
   var host=el('orders-host');
+  var mySeq=(renderOrders._seq=(renderOrders._seq||0)+1);
   host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px"><div class="muted" style="font-size:13px">Loading\u2026</div></div>';
   var nos = savedOrderNos();
+  var softFail=false;
   var acct=[];
   try{
     if(window.sbc){
       var s=await window.sbc.auth.getSession();
       if(s && s.data && s.data.session){
         var rr=await window.sbc.rpc('ob_my_orders',{p_store:window.OB_STORE});
+        if(rr && rr.error){ softFail=true; }
         if(rr && rr.data){ acct=rr.data.map(function(o){ return { order_no:o.id, created_at:o.created_at, total:Number(o.total||0), type:o.type, fulfilment:o.fulfilment, drop_point_id:o.drop_point_id, door_code:o.door_code, shop_id:o.shop_id, boxes_label:o.boxes_label, status:o.status, items:[] }; }); }
       }
     }
-  }catch(e){}
+  }catch(e){ softFail=true; }
   var dev=[];
   if(nos.length){
-    var results=await Promise.all(nos.map(function(no){ return fetchStatus(no); }));
-    results.forEach(function(r){ if(r && r.__missing){ pruneOrderNo(r.__missing); } });
-    dev=results.filter(function(r){ return r && !r.__missing; });
+    var pairs=await Promise.all(nos.map(function(no){ return fetchStatus(no).then(function(r){ return {no:no, r:r}; }); }));
+    pairs.forEach(function(p){
+      var no=p.no, r=p.r;
+      if(r && r.__missing){ pruneOrderNo(no); return; }              // confirmed gone (404) -> drop
+      if(r && !r.__missing){ dev.push(r); return; }                  // fresh
+      var c=cachedOrder(no); if(c){ dev.push(c); } else { softFail=true; }  // transient -> last-known-good
+    });
   }
   var seen={}, all=[];
   acct.concat(dev).forEach(function(o){ if(o && o.order_no && !seen[o.order_no]){ seen[o.order_no]=1; all.push(o); } });
@@ -4400,6 +4427,7 @@ async function renderOrders(){
   try{
     await Promise.all(all.map(function(o){
       if(o.items && o.items.length) return null;
+      var c=cachedOrder(o.order_no); if(c && c.items && c.items.length){ o.items=c.items; return null; }
       return fetchStatus(o.order_no).then(function(r){ if(r && r.items && r.items.length) o.items=r.items; }).catch(function(){});
     }));
   }catch(e){}
@@ -4409,8 +4437,9 @@ async function renderOrders(){
   try{ window.__ordersById={}; all.forEach(function(o){ if(o&&o.order_no) window.__ordersById[o.order_no]=o; }); }catch(e){}
   var oh=el('orders-live');
   if(oh){
+    if(mySeq!==renderOrders._seq) return;   // a newer renderOrders superseded us -> do not clobber
     var html='';
-    if(!all.length){ html=emptyOrdersHTML(); }
+    if(!all.length){ html = softFail ? ordersRefreshFailHTML() : emptyOrdersHTML(); }
     else {
       html = active.length ? active.map(orderCardLive).join('')
                            : '<div class="muted" style="font-size:13px;padding:2px 0 8px">No active orders right now.</div>';
