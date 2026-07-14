@@ -327,7 +327,7 @@ button.is-loading{pointer-events:none}
 /* toast */
 .toast{position:fixed; bottom:calc(var(--nav-h) + 18px); left:50%; transform:translateX(-50%) translateY(20px);
   background:var(--ink); color:#fff; padding:13px 20px; border-radius:12px; font-size:13.5px; font-weight:600;
-  z-index:100; opacity:0; pointer-events:none; transition:all .3s; box-shadow:0 8px 24px rgba(0,0,0,.25); max-width:90%}
+  z-index:100000; opacity:0; pointer-events:none; transition:all .3s; box-shadow:0 8px 24px rgba(0,0,0,.25); max-width:90%}
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
 /* orders list */
@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13m · payment on next step</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13n · invite feedback</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -4237,8 +4237,20 @@ async function placeOrder(){
 /* ---------- SUCCESS ---------- */
 function qrSvg(t){ try{ var q=window.qrcode(0,'M'); q.addData(String(t)); q.make(); return q.createSvgTag({cellSize:4,margin:2}); }catch(e){ return ''; } }
 function closeInvite(){ var o=document.getElementById('invite-sheet'); if(o) o.remove(); }
-function inviteShare(){ var url='https://oceanbasket.app'; if(navigator.share){ navigator.share({title:'Ocean Basket Seychelles',text:'Order fresh fish from Ocean Basket Seychelles',url:url}).catch(function(){}); } else { inviteCopy(); } }
-function inviteCopy(){ var url='https://oceanbasket.app'; try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(function(){ toast('Link copied'); }).catch(function(){ toast(url); }); } else { toast(url); } }catch(e){ toast(url); } }
+function inviteFlash(btn,label){
+  if(!btn) return;
+  if(btn._fTimer){ clearTimeout(btn._fTimer); } else { btn._fHTML=btn.innerHTML; btn._fStyle=btn.getAttribute('style')||''; }
+  btn.innerHTML=label;
+  btn.setAttribute('style', btn._fStyle+';background:#3f7a5a;color:#fff;border-color:#3f7a5a');
+  btn._fTimer=setTimeout(function(){ btn.setAttribute('style',btn._fStyle); btn.innerHTML=btn._fHTML; btn._fTimer=null; },1600);
+}
+function inviteCopyFallback(url,btn){
+  var ok=false;
+  try{ var ta=document.createElement('textarea'); ta.value=url; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:-1000px;left:-1000px;opacity:0'; document.body.appendChild(ta); ta.select(); try{ ta.setSelectionRange(0,url.length); }catch(e){} ok=document.execCommand('copy'); document.body.removeChild(ta); }catch(e){ ok=false; }
+  if(ok){ inviteFlash(btn,'Copied \u2713'); } else { toast('Link: '+url); }
+}
+function inviteShare(btn){ var url='https://oceanbasket.app'; if(navigator.share){ inviteFlash(btn,'Opening\u2026'); navigator.share({title:'Ocean Basket Seychelles',text:'Order fresh fish from Ocean Basket Seychelles',url:url}).catch(function(){}); } else { inviteCopy(btn); } }
+function inviteCopy(btn){ var url='https://oceanbasket.app'; try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(function(){ inviteFlash(btn,'Copied \u2713'); }).catch(function(){ inviteCopyFallback(url,btn); }); } else { inviteCopyFallback(url,btn); } }catch(e){ inviteCopyFallback(url,btn); } }
 function openInvite(){
   closeInvite();
   var url='https://oceanbasket.app';
@@ -4256,8 +4268,8 @@ function openInvite(){
       '<p style="margin:0 0 16px;color:#5b6472;font-size:13.5px">Scan to open Ocean Basket and order fresh fish.</p>'+
       '<div style="display:flex;justify-content:center;margin:4px 0 14px"><div style="width:190px;padding:12px;background:#fff;border:1px solid #e7edf3;border-radius:14px">'+qr+'</div></div>'+
       '<div style="text-align:center;font-weight:700;color:#0a1140;font-size:15px;margin-bottom:16px">oceanbasket.app</div>'+
-      (canShare?'<button onclick="inviteShare()" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px">Share link</button>':'')+
-      '<button onclick="inviteCopy()" style="width:100%;background:#fff;color:#0a1140;border:1px solid #cfd8e3;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer">Copy link</button>'+
+      (canShare?'<button onclick="inviteShare(this)" style="width:100%;background:#0a1140;color:#fff;border:0;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px">Share link</button>':'')+
+      '<button onclick="inviteCopy(this)" style="width:100%;background:#fff;color:#0a1140;border:1px solid #cfd8e3;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer">Copy link</button>'+
     '</div>';
   document.body.appendChild(ov);
 }
