@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13l · logo on splash + QR receipt</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13m · payment on next step</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -4074,11 +4074,6 @@ function renderPayment(){
     ? '<div class="field"><label>Delivery address</label><textarea id="f-address" rows="2" oninput="state.customer.address=this.value" placeholder="House, road, district — Mahé">'+(c.address||'')+'</textarea></div>'
     : '<div class="info-banner" style="margin-bottom:14px">Collecting from <b style="margin:0 4px">'+(pt?(pt.id+' \u00b7 '+pt.name):'—')+'</b>'+(pt?(' ('+pt.colorName+' label)'):'')+'</div>';
 
-  var methods=[['card','Card','Visa / Mastercard']];
-  var methodHtml=methods.map(function(m){
-    return '<button class="opt'+(state.payMethod===m[0]?' on':'')+'" data-pay="'+m[0]+'" onclick="setPay(\''+m[0]+'\')">'+
-      '<span class="radio"></span><div class="oc"><div class="ot"><h4>'+m[1]+'</h4></div><p>'+m[2]+'</p></div></button>';
-  }).join('');
 
   el('payment-host').innerHTML='<div class="pad">'+
     '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'<div style="background:#eef4fb;border:1px solid #d5e3f2;border-radius:9px;padding:10px 12px;margin:-2px 0 12px;font-size:13px;color:#0a1140">Already have an account? <a onclick="(window.obOpenSignin?window.obOpenSignin():go(\'account\'))" style="color:#1ba8d3;font-weight:700;cursor:pointer">Sign in</a> for faster checkout.</div>')+
@@ -4095,8 +4090,6 @@ function renderPayment(){
       '</div>'+
     '</div>')+
     addressFields+
-    '<h3 style="font-size:16px; margin:18px 0 12px">Payment method</h3>'+ methodHtml +
-    '<p style="font-size:12px;color:#8a8577;margin:8px 2px 0">Google Pay and Apple Pay may also appear at the payment step, on supported devices.</p>'+
     '<h3 style="font-size:16px; margin:18px 0 12px">Order summary</h3>'+
     '<div class="cart-summary" style="margin:0">'+
       state.cart.map(function(it){ var lbl=it.cut==='bottle'?'Bottle':('~'+(it.people||1)+((it.people||1)>1?' people':' person')+' \u00b7 '+fmtKg(it.grams)); return '<div class="row"><span class="k">'+it.name+' \u00b7 '+lbl+'</span><span class="v">'+money2(it.lineTotal)+'</span></div>'; }).join('')+
@@ -4105,7 +4098,7 @@ function renderPayment(){
       '<div class="row tot"><span class="k">Total to pay</span><span class="v">'+money2(total)+'</span></div>'+
     '</div>'+
     ''+
-    '<div style="margin-top:16px"><button class="btn gilt" id="payBtn" onclick="placeOrder()">Place order \u00b7 '+money2(total)+'</button></div>'+
+    '<div style="margin-top:16px"><button class="btn gilt" id="payBtn" onclick="placeOrder()">Go to payment \u00b7 '+money2(total)+'</button></div>'+
   '</div>';
 }
 function setPay(m){
