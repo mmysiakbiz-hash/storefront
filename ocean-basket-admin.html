@@ -198,7 +198,7 @@ a{color:var(--ink)}
 <div class="shell" id="shell">
   <div class="topbar">
     <img src="./ob-icon-192.png" alt="" style="width:30px;height:30px;border-radius:7px;margin-right:11px;vertical-align:middle;flex:none"><h1 style="display:inline-block;vertical-align:middle">Ocean Basket Admin</h1>
-    <span class="ver">build 2026-07-11b · users</span>
+    <span class="ver">build 2026-07-14a · lean nav</span>
     <span class="who" id="who"></span>
     <button class="out" onclick="signOut()">Sign out</button>
   </div>
@@ -765,11 +765,14 @@ function loadHealth(){
 }
 
 var TAB_PERM={ scan:'can_scan', orders:'can_view_orders', picklists:'can_view_orders', routes:'can_manage_routes', shops:'can_edit_stock', users:'can_manage_users' };
+// Tabs hidden from the nav while CloudPOS owns stock. Code stays intact (just
+// hidden from navigation) — reversible: empty this array to show every tab again.
+var HIDDEN_TABS=['scan','inventory','picklists','routes','replenish','shops'];
 function applyGating(){
   var activeHidden=false;
   document.querySelectorAll('.tabs button[data-tab]').forEach(function(b){
     var t=b.getAttribute('data-tab'); var perm=TAB_PERM[t];
-    var show=!perm || can(perm);
+    var show=(HIDDEN_TABS.indexOf(t)===-1) && (!perm || can(perm));
     b.style.display=show?'':'none';
     if(!show && b.classList.contains('on')) activeHidden=true;
   });
