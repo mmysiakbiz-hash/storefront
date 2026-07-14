@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13n · invite feedback</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13o · phone hint</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -4078,7 +4078,7 @@ function renderPayment(){
   el('payment-host').innerHTML='<div class="pad">'+
     '<h3 style="font-size:16px; margin-bottom:12px">Your details</h3>'+ (window.OB_USER&&window.OB_USER.email?'<div style="font-size:12px;color:#3f7a5a;margin:-6px 0 12px">Signed in as '+window.OB_USER.email+' \u00b7 saved to your account</div>':'<div style="background:#eef4fb;border:1px solid #d5e3f2;border-radius:9px;padding:10px 12px;margin:-2px 0 12px;font-size:13px;color:#0a1140">Already have an account? <a onclick="(window.obOpenSignin?window.obOpenSignin():go(\'account\'))" style="color:#1ba8d3;font-weight:700;cursor:pointer">Sign in</a> for faster checkout.</div>')+
     '<div class="field"><label>Full name</label><input id="f-name" oninput="state.customer.name=this.value" placeholder="Your name" value="'+(c.name||'')+'"></div>'+
-    '<div class="field"><label>WhatsApp / mobile number</label><input id="f-phone" type="tel" inputmode="tel" oninput="state.customer.phone=this.value" placeholder="e.g. 2 512 345" value="'+(c.phone||'')+'"><div style="font-size:12px;color:#857f74;margin-top:4px">Seychelles mobile — 7 digits, e.g. 2 512 345. Add +248 for a number outside Seychelles.</div></div>'+
+    '<div class="field"><label>WhatsApp / mobile number</label><input id="f-phone" type="tel" inputmode="tel" oninput="state.customer.phone=this.value" placeholder="e.g. 2 512 345" value="'+(c.phone||'')+'"><div style="font-size:12px;color:#857f74;margin-top:4px">Seychelles mobile — 7 digits, e.g. 2 512 345. Outside Seychelles, add your country code.</div></div>'+
     '<div class="field"><label>Email <span style="color:#a8341a">*</span></label><input id="f-email" oninput="state.customer.email=this.value" type="email" placeholder="you@email.com" value="'+(c.email||'')+'"></div>'+ '<div style="font-size:12px;color:#857f74;margin:-6px 0 12px">Required \u2014 we send your payment receipt and order confirmation here. Order updates also go to your WhatsApp number.</div>'+
     ((window.OB_USER&&window.OB_USER.email)?'':'<div style="background:#f3f7ee;border:1px solid #cfe0c2;border-radius:11px;padding:13px 14px;margin:0 0 14px">'+
       '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">'+
@@ -5078,7 +5078,7 @@ function renderTbDocs(){
     '<div class="field"><label>Full name (as on passport)</label><input id="tb-tname" placeholder="Full name" value="'+(c.name||'')+'"></div>'+
     '<div class="field"><label>Passport number</label><input id="tb-tpass" placeholder="Passport no." value="'+(c.passport||'')+'"></div>'+
     '<div class="field"><label>Nationality</label><input id="tb-tnat" placeholder="Nationality" value="'+(c.nationality||'')+'"></div>'+
-    '<div class="field"><label>Phone</label><input id="tb-tphone" type="tel" inputmode="tel" placeholder="e.g. 2 512 345" value="'+(c.phone||'')+'"><div class="muted" style="font-size:12px;margin-top:4px">7 digits, e.g. 2 512 345. Add +248 for a number outside Seychelles.</div></div>'+
+    '<div class="field"><label>Phone</label><input id="tb-tphone" type="tel" inputmode="tel" placeholder="e.g. 2 512 345" value="'+(c.phone||'')+'"><div class="muted" style="font-size:12px;margin-top:4px">7 digits, e.g. 2 512 345. Outside Seychelles, add your country code.</div></div>'+
     '<p class="muted" style="font-size:12px;margin-top:2px">More document fields will be added here once finalised.</p>'+
     '</div>'+
     '<div class="sticky-foot"><button class="btn gilt" id="tbDocsBtn" onclick="tbSubmitDocs()">Submit documents \u2192</button></div>';

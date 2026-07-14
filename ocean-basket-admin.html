@@ -198,7 +198,7 @@ a{color:var(--ink)}
 <div class="shell" id="shell">
   <div class="topbar">
     <img src="./ob-icon-192.png" alt="" style="width:30px;height:30px;border-radius:7px;margin-right:11px;vertical-align:middle;flex:none"><h1 style="display:inline-block;vertical-align:middle">Ocean Basket Admin</h1>
-    <span class="ver">build 2026-07-14a · lean nav</span>
+    <span class="ver">build 2026-07-14b · ui fixes</span>
     <span class="who" id="who"></span>
     <button class="out" onclick="signOut()">Sign out</button>
   </div>
@@ -789,7 +789,7 @@ function renderUsers(){
     var shops=(u.shop_ids&&u.shop_ids.length)?u.shop_ids.map(shopName).join(', '):'all shops';
     var perms=['can_scan','can_edit_stock','can_view_orders','can_manage_routes','can_manage_users'].filter(function(k){return u[k];}).map(function(k){return k.replace('can_','').replace('_',' ');}).join(' \u00b7 ')||'\u2014';
     return '<div class="rep-row"><span><b>'+(u.full_name||u.email)+'</b> \u00b7 '+u.email+'<br><span class="muted" style="font-size:12px">'+u.role+' \u00b7 '+shops+' \u00b7 '+perms+(u.active?'':' \u00b7 <i>inactive</i>')+'</span></span>'+
-      '<span><button class="btn ghost sm" onclick="userEdit('+u.id+')">Edit</button> <button class="btn ghost sm" onclick="userSetActive(\''+u.email+'\','+(u.active?'false':'true')+')">'+(u.active?'Deactivate':'Reactivate')+'</button></span></div>';
+      '<span style="display:flex;gap:8px;flex:none"><button class="btn ghost sm" onclick="userEdit('+u.id+')">Edit</button> <button class="btn ghost sm" onclick="userSetActive(\''+u.email+'\','+(u.active?'false':'true')+')">'+(u.active?'Deactivate':'Reactivate')+'</button></span></div>';
   }).join('')||'<div class="muted" style="font-size:13px">No staff yet.</div>';
   host.innerHTML='<div class="section-head"><h2>Users</h2><button class="btn gilt sm" onclick="userForm(null)">+ Add staff</button></div>'+
     '<div class="card"><p class="muted" style="font-size:12.5px;margin-bottom:12px">Each person signs in with their <b>own</b> Supabase account. After adding them here, invite the email in Supabase Auth (Authentication \u2192 Users) or have them sign up with it \u2014 their role &amp; permissions apply on first login.</p>'+rows+'</div>';
@@ -1059,9 +1059,9 @@ boot();
     '</div>';
     var pts=Object.keys(pointAgg).sort();
     var pointTable=pts.length? '<h3 class="cl-h">Avg freezer \u2192 collection by point</h3><div class="cl-pts">'+
-      pts.map(function(p){ return '<div class="cl-pt"><b>'+p+'</b> '+fmtDur(avg(pointAgg[p]))+' <span class="cl-mut">('+pointAgg[p].length+')</span></div>'; }).join('')+'</div>' : '';
+      pts.map(function(p){ return '<div class="cl-pt"><b>'+p+'</b> <span class="cl-mut">'+fmtDur(avg(pointAgg[p]))+' &middot; '+pointAgg[p].length+'</span></div>'; }).join('')+'</div>' : '';
 
-    var sortSel='<div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><span class="cl-mut" style="font-size:12px">Sort by</span>'+
+    var sortSel='<div style="display:flex;align-items:center;gap:8px;margin:0 0 12px"><span class="cl-mut" style="font-size:12px">Sort by</span>'+
       '<select id="cl-sort" onchange="renderClients()" style="font:14px Outfit,sans-serif;padding:7px 10px;border:1px solid #e4ddcf;border-radius:6px;background:#fff">'+
       [['recent','Most recent'],['ltv','Lifetime value'],['orders','Order count'],['avg','Avg order value'],['dormant','Longest inactive']]
         .map(function(o){return '<option value="'+o[0]+'"'+(o[0]===sortKey?' selected':'')+'>'+o[1]+'</option>';}).join('')+
@@ -1097,7 +1097,7 @@ boot();
       '</div>';
     }).join('');
 
-    host.innerHTML=summary+patterns+pointTable+sortSel+'<h3 class="cl-h">Clients ('+clients.length+')</h3>'+(list||'<div class="cl-mut">No orders yet.</div>');
+    host.innerHTML=summary+patterns+pointTable+'<h3 class="cl-h">Clients ('+clients.length+')</h3>'+sortSel+(list||'<div class="cl-mut">No orders yet.</div>');
   };
 })();
 </script>
