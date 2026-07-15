@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13o · phone hint</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13p · fifo intake</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3625,11 +3625,15 @@ function renderSpecies(){
 /* ---------- PRODUCT / CONFIGURE (v2 — packs model) ---------- */
 /* pack-fit engine (spec): exact -> combination -> closest */
 function unitAgeKey(u){
-  // Oldest-first key for perishable rotation. Prefer a real expiry/intake date
-  // once CloudPOS sends one (FEFO); until then fall back to the trailing number
-  // in the unit code (WRS07 -> 7), which reflects intake order within a batch.
-  // created_at is the sync timestamp (uniform), so it is NOT used here.
+  // Oldest-first key for perishable rotation.
+  // 1) real expiry when CloudPOS sends one (FEFO)
   if(u && u.use_by){ var t=Date.parse(u.use_by); if(!isNaN(t)) return t; }
+  // 2) CloudPOS intake order (v2_33). Their online-stock endpoint returns units
+  //    FIFO by intake, and ob_sync_pos_units records that position in intake_seq.
+  //    Durable: unit_code is RECYCLED once a unit sells or moves, so digits in
+  //    uid are a slot number, NOT an age.
+  if(u && u.intake_seq!=null) return u.intake_seq;
+  // 3) legacy fallback: manual/scan-in units have no POS intake order
   var m=String((u && u.uid) || "").match(/(\d+)\s*$/);
   return m ? parseInt(m[1],10) : Number.MAX_SAFE_INTEGER;
 }
