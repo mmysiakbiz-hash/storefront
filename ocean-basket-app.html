@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13p · fifo intake</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13q · portion band</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3279,6 +3279,9 @@ function loadCatalog(){
         if(d.config.service_charge_per_box!=null) CFG.servicePerBox = Number(d.config.service_charge_per_box);
         if(d.config.certification_charge!=null) CFG.certCharge = Number(d.config.certification_charge);
         if(d.config.travel_max_kg!=null) CFG.travelMaxKg = Number(d.config.travel_max_kg);
+        if(d.config.portion_fit_pct!=null) CFG.fitPct = Number(d.config.portion_fit_pct);
+        if(d.config.portion_max_pct!=null) CFG.maxPct = Number(d.config.portion_max_pct);
+        if(d.config.portion_prefer_heavier!=null) CFG.preferHeavier = !!d.config.portion_prefer_heavier;
       }
       // produkty v2 -> CATALOG (zgodne wstecz: forms[]; + photo, type, base_price, variants[])
       if(Array.isArray(d.products) && d.products.length){
@@ -3332,8 +3335,12 @@ var CFG = {
   currency: 'SCR',
   orderPrefix: 'OB',
   gramsPerPerson: 250,
-  tolLow: 225, tolHigh: 275,
-  gramsWhole: 500, wholeLow: 450, wholeHigh: 550,
+  gramsWhole: 500,
+  // Portion tolerance (Q5, confirmed by Louis): within fitPct of the target is a good
+  // fit; fitPct..maxPct is a next-best offer; beyond maxPct we do not recommend it at
+  // all. preferHeavier is his upsell rule: on a tie, offer the bigger fish.
+  // Defaults here are the fallback; ob_config (v2_35) overrides them per store.
+  fitPct: 15, maxPct: 25, preferHeavier: true,
   deliveryFee: 150,
   freeFrom: 2000,
   upsellAt: 0.70
@@ -3463,7 +3470,7 @@ function el(id){ return document.getElementById(id); }
 
 /* portion engine: people -> target grams (rounded to 250) */
 function perPortionG(cut){ return cut==='whole' ? CFG.gramsWhole : CFG.gramsPerPerson; }
-function portionBandG(cut){ return cut==='whole' ? { lo:CFG.wholeLow, hi:CFG.wholeHigh } : { lo:CFG.tolLow, hi:CFG.tolHigh }; }
+function portionBandG(cut){ var per=perPortionG(cut), f=Math.max(0,Number(CFG.fitPct)||15)/100; return { lo:per*(1-f), hi:per*(1+f) }; }
 function impliedPeople(weightKg, cut){ return Math.max(1, Math.round(weightKg*1000 / perPortionG(cut))); }
 
 /* ---------- NAV ---------- */
@@ -3646,9 +3653,23 @@ function recsFor(){
   var people=c.people||1, per=perPortionG(c.cut), band=portionBandG(c.cut);
   var targetG=people*per, loG=people*band.lo, hiG=people*band.hi;
   var items=unitsForSel(s,c.state,c.cut).slice();
-  // 1) size-relevant candidates first (closest to the requested size)
-  items.sort(function(a,b){ return Math.abs(a.weight_kg*1000-targetG) - Math.abs(b.weight_kg*1000-targetG); });
-  var picked=items.slice(0,5);
+  // 1) Hard ceiling (Q5, Louis): past maxPct from the target it is not a portion
+  //    option any more, it is a different fish. Without this the list happily offers
+  //    a 3.4 kg fish for a 2 kg request whenever stock is thin.
+  //    Never dead-end: if nothing sits inside the ceiling, fall back to the whole set
+  //    so the customer still sees honestly-labelled choices instead of an empty list.
+  var maxF=Math.max(0,Number(CFG.maxPct)||25)/100;
+  var ceilLo=targetG*(1-maxF), ceilHi=targetG*(1+maxF);
+  var inCeil=items.filter(function(u){ var g=u.weight_kg*1000; return g>=ceilLo-1e-6 && g<=ceilHi+1e-6; });
+  var pool=inCeil.length?inCeil:items;
+  // 2) size-relevant candidates first (closest to the requested size). On a tie Ocean
+  //    Basket prefers to offer slightly more rather than slightly less.
+  pool.sort(function(a,b){
+    var da=Math.abs(a.weight_kg*1000-targetG), db=Math.abs(b.weight_kg*1000-targetG);
+    if(Math.abs(da-db)>1e-6) return da-db;
+    return CFG.preferHeavier ? (b.weight_kg-a.weight_kg) : (a.weight_kg-b.weight_kg);
+  });
+  var picked=pool.slice(0,5);
   // 2) FIFO within that set: oldest stock first (perishable rotation)
   picked.sort(function(a,b){ return unitAgeKey(a)-unitAgeKey(b); });
   return picked.map(function(u){
