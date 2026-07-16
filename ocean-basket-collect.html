@@ -116,14 +116,53 @@ function screenScan(order){
       return resultBad(order,'this is freezer '+got.freezer+', but your order is at '+dp);
     }
     try{ localStorage.setItem('ob_oriented_'+order, String(Date.now())); }catch(e){}
-    resultGood(order);
+
+    // Close the order. Louis approved customer self-scan at freezer points: there is no
+    // cashier there, so the customer is the only one who can confirm the handover.
+    // We do NOT decide that here. ob_collect checks ob_drop_points.pos_managed and
+    // refuses at staffed points, where the cashier confirms on the POS instead. So the
+    // same screen is correct at both kinds of point, and re-classifying a point is a
+    // flag in the database, not a code change.
+    var done=null;
+    try{
+      var cr=await sb.rpc('ob_collect',{p_store:STORE,p_order:order,p_drop_point:(dp||got.freezer.toUpperCase())});
+      done=(cr && cr.data) ? cr.data : null;
+    }catch(e){ done=null; }
+
+    if(done && done.ok){ return resultGood(order, true); }
+
+    // Every other outcome is a real state, not a failure of the scan. The pack IS the
+    // right one - we checked - so never send the customer away empty-handed: show the
+    // QR and tell them what actually needs to happen.
+    var why=(done && done.reason) || 'offline';
+    if(why==='pos_managed_point'){ return resultGood(order, false, 'staff'); }
+    if(why==='not_ready'){ return resultBad(order, 'this order is not ready for collection yet ('+((done&&done.status)||'?')+')'); }
+    return resultGood(order, false, 'offline');
   }
 }
-function resultGood(order){
-  view.innerHTML='<div class="verdict go"><div class="ico">'+I.check+'</div><div class="head">Right freezer, right pack</div>'+
-    '<div class="txt">Now show this QR to staff at the exit to complete your pickup.</div></div>'+
+/**
+ * collected = true  -> ob_collect closed the order. Done, they can go.
+ * mode 'staff'      -> a staffed point: the cashier completes it on the POS.
+ * mode 'offline'    -> we could not reach the server. The checks passed, so the pack is
+ *                      theirs; the QR is what staff or the online team can act on.
+ */
+function resultGood(order, collected, mode){
+  var head, txt;
+  if(collected){
+    head='Collected - enjoy your fish';
+    txt='Your order is complete. Keep this code in case anyone asks.';
+  } else if(mode==='staff'){
+    head='Right freezer, right pack';
+    txt='Show this QR to staff to complete your pickup.';
+  } else {
+    head='Right freezer, right pack';
+    txt='We could not confirm it online just now. Take your pack and show this QR to staff, or call the online team.';
+  }
+  view.innerHTML='<div class="verdict go"><div class="ico">'+I.check+'</div><div class="head">'+head+'</div>'+
+    '<div class="txt">'+txt+'</div></div>'+
     '<div class="card" style="text-align:center"><div style="max-width:220px;margin:0 auto">'+qrSvg(order)+'</div><div style="font-family:ui-monospace,monospace;font-weight:700;color:#0a1140;margin-top:10px">'+order+'</div></div>'+
-    '<a class="btn" href="ocean-basket-app.html?order='+encodeURIComponent(order)+'" style="display:block;text-align:center;text-decoration:none">Back to my order</a>';
+    (collected?'':'<a class="call" href="tel:2666666" style="margin-top:12px">'+I.phone+' 2666666</a>')+
+    '<a class="btn" href="ocean-basket-app.html?order='+encodeURIComponent(order)+'" style="display:block;text-align:center;text-decoration:none;margin-top:12px">Back to my order</a>';
 }
 function resultBad(order,note){
   view.innerHTML='<div class="verdict stop"><div class="ico">'+I.cross+'</div><div class="head">Check again</div><div class="txt">'+order+' - '+note+'. Find the correct freezer, or call the online team.</div><a class="call" href="tel:2666666">'+I.phone+' 2666666</a></div><button class="btn sec" id="again" style="margin-top:14px">Back</button>';
