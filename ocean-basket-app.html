@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13q · portion band</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13r · live orders</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -3476,6 +3476,26 @@ function impliedPeople(weightKg, cut){ return Math.max(1, Math.round(weightKg*10
 /* ---------- NAV ---------- */
 function tbReleaseAll(){ try{ var uids=[]; ((state.tb&&state.tb.items)||[]).forEach(function(it){ if(it.uids) uids=uids.concat(it.uids); }); if(uids.length){ fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'release',session:sid(),uids:uids})}).then(function(){ return loadUnits(); }).catch(function(){}); } if(state.tb) state.tb.items=[]; }catch(e){} }
 window.addEventListener('pagehide', function(){ try{ var uids=[]; ((state.tb&&state.tb.items)||[]).forEach(function(it){ if(it.uids) uids=uids.concat(it.uids); }); if(uids.length && navigator.sendBeacon){ navigator.sendBeacon(API_BASE+'/reservation', new Blob([JSON.stringify({action:'release',session:sid(),uids:uids})],{type:'application/json'})); } }catch(e){} });
+/* Live status on the Orders screen.
+   The customer is not sitting here waiting - the ready-to-collect email is what brings
+   them back. But when this screen IS open (standing at the freezer, checking), it should
+   not show a status that changed two minutes ago. So: a quiet refresh every 20s, and an
+   immediate one whenever the tab regains focus.
+   Nothing runs while the screen is closed or the tab is hidden - no background chatter. */
+var _ordersPoll=null;
+function startOrdersPoll(){
+  stopOrdersPoll();
+  _ordersPoll=setInterval(function(){
+    if(state.screen!=='orders'){ stopOrdersPoll(); return; }
+    if(document.hidden) return;
+    renderOrders(true);
+  }, 20000);
+}
+function stopOrdersPoll(){ if(_ordersPoll){ clearInterval(_ordersPoll); _ordersPoll=null; } }
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && state.screen==='orders'){ renderOrders(true); }
+});
+
 function go(screen){
   try{ var _prev=state.screen; var _abandon={home:1,shop:1,orders:1,profile:1,cart:1}; if(_prev && _prev.indexOf('tb-')===0 && _prev!=='tb-success' && _abandon[screen] && state.tb && state.tb.items && state.tb.items.length){ tbReleaseAll(); } }catch(e){}
   state.screen = screen;
@@ -3494,7 +3514,7 @@ function go(screen){
   if(screen==='delivery'){ renderDelivery(); loadLoyalty(); }
   if(screen==='map'){ state.allStock=null; renderMap(); }
   if(screen==='payment'){ renderPayment(); }
-  if(screen==='orders'){ renderOrders(); }
+  if(screen==='orders'){ renderOrders(); startOrdersPoll(); } else { stopOrdersPoll(); }
   if(screen==='tb-shop'){ renderTbShop(); }
   if(screen==='tb-box'){ renderTbBox(); }
   window.scrollTo(0,0);
@@ -4547,10 +4567,14 @@ async function reorder(no){
     go('cart');
   }catch(e){ toast('Network problem \u2014 try again.'); }
 }
-async function renderOrders(){
+async function renderOrders(quiet){
   var host=el('orders-host');
   var mySeq=(renderOrders._seq=(renderOrders._seq||0)+1);
-  host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px"><div class="muted" style="font-size:13px">Loading\u2026</div></div>';
+  // quiet = a background refresh: leave what is on screen alone until the new data is
+  // here. Repainting Loading... every 20 seconds would look broken.
+  if(!quiet || !el('orders-live')){
+    host.innerHTML='<div class="sectit">Your orders</div>'+orderLookupHTML()+'<div id="orders-live" class="pad" style="padding-top:10px"><div class="muted" style="font-size:13px">Loading\u2026</div></div>';
+  }
   var nos = savedOrderNos();
   var softFail=false;
   var acct=[];
