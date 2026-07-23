@@ -3045,7 +3045,7 @@ try{window.qrcode=module.exports;}catch(e){}})();
       <button class="prof-row" onclick="openSupport()"><span class="pico" data-ic="chat"></span><span class="pt">Help & support</span><span class="arr">›</span></button>
       <button class="prof-row" onclick="toast('Ocean Basket Seychelles · Providence Quay, Mahé')"><span class="pico" data-ic="profile"></span><span class="pt">About</span><span class="arr">›</span></button>
     </div>
-    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-13r · live orders</p>
+    <p style="text-align:center;font-size:11px;color:var(--mut);opacity:.6;margin:18px 0 0">build 2026-07-22a · live orders</p>
   </section>
 
   <!-- ============ TRAVEL BOX: HOME ============ -->
@@ -4872,9 +4872,9 @@ var TB_AIRLINES = ['Air Seychelles','Emirates','Qatar Airways','Etihad','Ethiopi
 /* box sizes: cap = capacity kg; price = per-box service charge (SCR).
    PRELIMINARY prices pending Louis confirmation — adjust the three numbers here. */
 var TB_BOXES = [
-  {id:'s', name:'Small Travel Box', cap:5,  price:80},
-  {id:'m', name:'Medium Travel Box', cap:10, price:120},
-  {id:'l', name:'Large Travel Box', cap:20, price:160}
+  {id:'s', name:'Small Travel Box',  cap:5,  inW:26.7, net:3.0,  price:80},
+  {id:'m', name:'Medium Travel Box', cap:15, inW:25.5, net:9.0,  price:120},
+  {id:'l', name:'Large Travel Box',  cap:25, inW:36.0, net:15.0, price:160}
 ];
 
 /* travel-box outlets = the 4 collection outlets only */
@@ -4897,12 +4897,126 @@ function extendTravel(){
 function tbHoldBar(){ return ''; /* unified: pinned #globalhold shows on all screens */ if(!state.tb||!state.tb.items.length) return ''; var rs=tbRemainSec(); return '<div class="hold-bar'+(rs<=0?' expired':'')+'" style="margin:12px 18px 0"><span class="ht cd">'+mmss(rs)+'</span><span class="hx">'+(rs>0?'Your Travel Box is held and hidden from public availability while it ticks.':'Hold expired \u2014 items released. Add fish again.')+'</span>'+((rs>0&&tbAnyExt())?'<button onclick="extendTravel()">Extend</button>':'')+'</div>'; }
 function tbBoxById(id){ return TB_BOXES.filter(function(b){return b.id===id;})[0]; }
 function tbBoxPrice(b){ return (b && b.price!=null) ? Number(b.price) : (CFG.servicePerBox!=null?CFG.servicePerBox:80); }
+/* ===== TRAVEL BOX auto box-selector (grade x width x 60% budget) =====
+   Runs in the background over the held Travel Box items. No box picker.
+   Fresh and frozen never share a box (frozen would defrost).
+   Gel ice rides in the 40% headroom above the fill line, so it is NOT
+   taken off the product budget. All dials overridable from ob_config. */
+function tbFillPct(){ return (typeof CFG!=="undefined" && CFG.travelFillPct!=null) ? Number(CFG.travelFillPct) : 0.60; }
+function tbTol(st){
+  if(st==="frozen") return (typeof CFG!=="undefined" && CFG.travelTolFrozen!=null) ? Number(CFG.travelTolFrozen) : 0.90;
+  return (typeof CFG!=="undefined" && CFG.travelTolFresh!=null) ? Number(CFG.travelTolFresh) : 1.10;
+}
+var TB_GRADE = {
+  red_snapper:[5,15,15,25,25,25],
+  jobfish:[5,5,15,25,25,25],
+  grouper:[5,15,15,25,25,25],
+  emperor:[5,15,15,15,25,25]
+};
+var TB_GRADE_FALLBACK = [5,15,15,25,25,25];
+var TB_WIDTH = { red_snapper:24, jobfish:12.5, grouper:14, emperor:19.5 };
+
+function tbBudget(box){ return Math.max(0, Number((box.cap*tbFillPct()).toFixed(2))); }
+function tbBoxInsideW(box, st){ return box.inW*tbTol(st); }
+function tbBoxBySize(sz){ return TB_BOXES.filter(function(b){ return b.cap===sz; })[0]; }
+function tbGradeBracket(w){ return w<=1?0:w<=2?1:w<=3?2:w<=4?3:w<=5?4:5; }
+function tbReqBoxSize(sp,w){ if(w>6) return 0; var g=TB_GRADE[sp]||TB_GRADE_FALLBACK; return g[tbGradeBracket(w)]; }
+function tbFishWidth(sp){ return (TB_WIDTH[sp]!=null)?TB_WIDTH[sp]:0; }
+
+/* pack ONE state group (all fresh, or all frozen) */
+function tbPackGroup(items, st){
+  var wholes=[], smallKg=0, oversize=[];
+  (items||[]).forEach(function(it){
+    if(it.cut==="whole"){
+      var sz=tbReqBoxSize(it.speciesId, it.weight||0);
+      if(!sz){ oversize.push(it); return; }
+      wholes.push({ it:it, size:sz, width:tbFishWidth(it.speciesId), w:(it.weight||0) });
+    } else { smallKg += (it.weight||0); }
+  });
+  wholes.sort(function(a,b){ return b.size-a.size || b.width-a.width; });
+
+  var boxes=[], forced=false;
+  wholes.forEach(function(f){
+    var placed=false, k;
+    for(k=0;k<boxes.length;k++){
+      var bx=boxes[k]; if(bx.box.cap<f.size) continue;
+      if(bx.usedW+f.width<=tbBoxInsideW(bx.box,st)+1e-9 && bx.usedKg+f.w<=tbBudget(bx.box)+1e-9){
+        bx.usedW+=f.width; bx.usedKg+=f.w; bx.fishKg+=f.w; placed=true; break;
+      }
+    }
+    if(!placed){
+      for(k=0;k<boxes.length;k++){ if(boxes[k].box.cap>=f.size){ forced=true; break; } }
+      boxes.push({ box:tbBoxBySize(f.size), state:st, usedW:f.width, usedKg:f.w, fishKg:f.w, filletKg:0 });
+    }
+  });
+
+  var warnings=[];
+  if(forced) warnings.push("SECOND_WHOLE_FISH");
+
+  var wholeBoxes=boxes.length, rem=smallKg, j;
+  for(j=0;j<boxes.length && rem>1e-9;j++){
+    var room=tbBudget(boxes[j].box)-boxes[j].usedKg, take=Math.min(room,rem);
+    if(take>0){ boxes[j].usedKg+=take; boxes[j].filletKg+=take; rem-=take; }
+  }
+  if(rem>1e-9){
+    if(wholeBoxes>0) warnings.push("WEIGHT_OVERFLOW");
+    while(rem>1e-9){
+      var cand=TB_BOXES.filter(function(b){ return tbBudget(b)>=rem-1e-9; }).sort(function(a,b){ return a.price-b.price; })[0];
+      if(cand){ boxes.push({ box:cand, state:st, usedW:0, usedKg:rem, fishKg:0, filletKg:rem }); rem=0; }
+      else { var big=TB_BOXES[TB_BOXES.length-1]; boxes.push({ box:big, state:st, usedW:0, usedKg:tbBudget(big), fishKg:0, filletKg:tbBudget(big) }); rem-=tbBudget(big); }
+    }
+  }
+  return { boxes:boxes, warnings:warnings, oversize:oversize };
+}
+
+/* fresh and frozen packed separately, then combined */
+function tbPackItems(items){
+  var fresh=[], frozen=[];
+  (items||[]).forEach(function(it){ if(it.state==="frozen") frozen.push(it); else fresh.push(it); });
+  var out={ boxes:[], warnings:[], oversize:[] }, groups=[];
+  if(fresh.length) groups.push({st:"fresh", items:fresh});
+  if(frozen.length) groups.push({st:"frozen", items:frozen});
+  groups.forEach(function(g){
+    var r=tbPackGroup(g.items, g.st);
+    r.boxes.forEach(function(b){ out.boxes.push(b); });
+    r.warnings.forEach(function(w){ if(out.warnings.indexOf(w)<0) out.warnings.push(w); });
+    r.oversize.forEach(function(o){ out.oversize.push(o); });
+  });
+  if(fresh.length && frozen.length) out.warnings.push("MIXED_STATES");
+  return out;
+}
+
+function tbAllocLabel(alloc){
+  if(!alloc.length) return "No box needed";
+  var c={}; alloc.forEach(function(b){ var n=b.name.replace(" Travel Box",""); c[n]=(c[n]||0)+1; });
+  var order=["Large","Medium","Small"], parts=[];
+  order.forEach(function(n){ if(c[n]) parts.push(c[n]+" "+n+" box"); });
+  return parts.join(" + ");
+}
+function tbBoxMessages(prev){
+  if(!prev) return "";
+  var out="", W=prev.warnings||[], O=prev.oversize||[];
+  O.forEach(function(o){
+    out+='<div class="info-banner" style="margin-top:12px;background:#3a1512;color:#f6d5cc">'+svg("check",14,1.8)+' '+((o&&o.name)||"This fish")+' is too large to travel whole. Please take it as fillets or portions, or contact the shop.</div>';
+  });
+  if(W.indexOf("MIXED_STATES")>-1){
+    out+='<div class="info-banner" style="margin-top:12px">'+svg("check",14,1.8)+' Fresh and frozen items travel in separate boxes, so the frozen stays frozen.</div>';
+  }
+  if(W.indexOf("SECOND_WHOLE_FISH")>-1){
+    out+='<div class="info-banner" style="margin-top:12px">'+svg("check",14,1.8)+' These whole fish cannot all share one box, so a second box was added. Both boxes still have room for fillets or portions at no extra box cost.</div>';
+  }
+  if(W.indexOf("WEIGHT_OVERFLOW")>-1){
+    out+='<div class="info-banner" style="margin-top:12px">'+svg("check",14,1.8)+' Your fillets and portions go past the safe weight of one box, so a second box was added. Remove a little to keep it to one if you prefer.</div>';
+  }
+  return out;
+}
+
+/* DROP-IN: same {boxes,label,alloc}; adds warnings/oversize/perBox. Reads held items, ignores w. */
 function tbBoxPreview(w){
-  var s=tbBoxById('s'), m=tbBoxById('m'), l=tbBoxById('l');
-  if(w<=5)  return {boxes:1, label:'1 Small Box',  alloc:[s]};
-  if(w<=10) return {boxes:1, label:'1 Medium Box', alloc:[m]};
-  if(w<=15) return {boxes:1, label:'1 Large Box',  alloc:[l]};
-  return {boxes:2, label:'1 Large Box + 1 Medium Box', alloc:[l,m]};
+  var packed=tbPackItems((state.tb && state.tb.items) ? state.tb.items : []);
+  var alloc=packed.boxes.map(function(bx){ return bx.box; });
+  return { boxes:alloc.length, label:tbAllocLabel(alloc), alloc:alloc,
+           warnings:packed.warnings, oversize:packed.oversize, perBox:packed.boxes };
 }
 function tbServiceCharge(){ return tbBoxPreview(tbWeight()).alloc.reduce(function(a,b){ return a+tbBoxPrice(b); },0); }
 function tbServiceLabel(alloc){
@@ -4922,7 +5036,7 @@ function renderTbFlight(){
   var airOptions = TB_AIRLINES.map(function(a){ return { value:a, label:a }; });
   var tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
   el('tb-flight-host').innerHTML='<div class="pad">'+
-    '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. Maximum net weight '+tbCap()+' kg.</p>'+
+    '<p class="muted" style="font-size:13px;margin-bottom:18px">Travel boxes are prepared for <b>next-day</b> collection at one of our four shops. We choose the right airline box for your order automatically.</p>'+
     '<div class="field"><label>Collection shop *</label>'+obSelectHTML('sel-tbshop', shopOptions, t.shop||'', 'Select shop')+'</div>'+
     '<div style="display:flex;gap:10px"><div class="field" style="flex:1.5;margin-bottom:14px"><label>Collection date *</label><input id="tb-cdate" type="date" min="'+tomorrow+'" value="'+((t.collectionAt||'').slice(0,10))+'" oninput="tbSyncColl()"></div>'+
     '<div class="field" style="flex:1;margin-bottom:14px"><label>Time <small style="opacity:.7;font-weight:400">(08\u201317)</small></label><select id="tb-ctime" onchange="tbSyncColl()">'+tbTimeOpts(((t.collectionAt||'').slice(11,16))||'08:00')+'</select></div></div>'+
@@ -4982,16 +5096,19 @@ function renderTbShop(){
       '<span style="color:var(--gilt);font-size:24px;line-height:1">\u203a</span>'+
     '</button>';
   }).join('');
-  host.innerHTML=tbHoldBar()+'<div class="pad" style="padding-bottom:6px"><p class="muted" style="font-size:13px">Pick fish for your box. Each item is reserved and counts toward your '+tbCap()+' kg cap.</p></div>'+
+  host.innerHTML=tbHoldBar()+'<div class="pad" style="padding-bottom:6px"><p class="muted" style="font-size:13px">Pick fish for your box. Each item is reserved while you build your box.</p></div>'+
     '<div class="pad" style="padding-top:8px;padding-bottom:8px">'+cards+'</div>'+
     '<div class="weight-meter" id="tb-meter"></div>';
   renderTbMeter();
 }
 function renderTbMeter(){
-  var w=tbWeight(), cap=tbCap(), pct=Math.min(100,Math.round(w/cap*100)), over=w>cap, sub=tbSubtotal();
+  var w=tbWeight(), sub=tbSubtotal(), prev=tbBoxPreview(w);
+  var budget=prev.alloc.reduce(function(a,b){ return a+tbBudget(b); },0);
+  var pct=budget>0?Math.min(100,Math.round(w/budget*100)):0;
   var host=el('tb-meter'); if(!host) return;
-  host.innerHTML='<div class="wm-top"><span class="wm-now">'+w.toFixed(2)+' kg <small>/ '+cap+' kg cap</small></span><span class="wm-cap">'+money(sub)+' \u00b7 '+pct+'%</span></div>'+
-    '<div class="bar"><i class="'+(over?'over':'')+'" style="width:'+pct+'%"></i></div>'+
+  var boxTxt=prev.alloc.length?prev.label:"No box yet";
+  host.innerHTML='<div class="wm-top"><span class="wm-now">'+w.toFixed(2)+' kg <small>\u00b7 '+boxTxt+'</small></span><span class="wm-cap">'+money(sub)+'</span></div>'+
+    '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
     '<button class="btn wm-btn" '+(w<=0?'disabled':'')+' onclick="tbToBox()">Review box \u00b7 '+w.toFixed(2)+' kg \u00b7 '+money(sub)+'</button>';
 }
 
@@ -5002,7 +5119,7 @@ function tbAddFromProduct(){
   var recs=recsFor();
   var rec = recs.filter(function(r){return r.key===c.sel;})[0] || recs[0];
   if(!rec){ btnDone(_b); toast('No stock available for this choice.'); return; }
-  if(tbWeight()+rec.weight > tbCap()+1e-9){ btnDone(_b); toast('That would exceed the '+tbCap()+' kg Travel Box cap — remove or reduce an item first.'); return; }
+  /* no flat cap: box grows to fit; a second box is added automatically when needed */
   fetch(API_BASE+'/reservation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'hold',session:sid(),uids:rec.uids,mode:'travel'})})
     .then(function(r){ return r.json().then(function(res){ return {ok:r.ok,res:res}; }); })
     .then(function(o){
@@ -5039,7 +5156,7 @@ function renderTbBox(){
     '<div class="box-card">'+
       '<div class="rec">Allocated packing</div>'+
       '<h3>'+prev.label+'</h3>'+
-      '<div class="cap">net '+w.toFixed(2)+' kg of '+tbCap()+' kg max</div>'+
+      '<div class="cap">net '+w.toFixed(2)+' kg packed</div>'+
       '<div class="box-ic">'+svg('travel',64,1)+'</div>'+
       '<div class="box-spec">'+
         '<div class="box-check">'+svg('check',16,1.6)+' Insulated foam box + ice packs</div>'+
@@ -5051,6 +5168,7 @@ function renderTbBox(){
         '<div class="r" style="border-top:1px solid var(--line);padding-top:10px;font-weight:700"><span class="k">Total</span><span class="v">'+money2(sub+svc+cert)+'</span></div>'+
       '</div>'+
     '</div>'+
+    tbBoxMessages(prev)+
     '<h3 style="font-size:15px;margin:4px 0 10px">In your box</h3><div class="cart-items" style="padding:0">'+(lines||'<p class="muted" style="font-size:12.5px">No items yet.</p>')+'</div>'+
     '<button class="btn ghost" style="margin-top:6px" onclick="go(\'tb-shop\')">Add more fish</button>'+
     '</div>'+
